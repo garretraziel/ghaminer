@@ -9,14 +9,29 @@
 
 import os
 import argparse
+import random
 
 import github
+
+
+MAX_ID = 30500000  # zjisteno experimentalne
 
 
 def main(sample_count, output):
     gh = github.GitHub(username=os.getenv("GH_USERNAME"), password=os.getenv("GH_PASSWORD"))
 
-    print gh.repositories().get(since=40400)
+    samples = []
+    remaining = sample_count
+    while remaining > 0:
+        resp = gh.repositories().get(since=random.randrange(MAX_ID))
+        rsample = random.sample(resp, max(remaining, len(resp)))
+
+        samples.extend(rsample)
+        remaining -= len(rsample)
+
+    with open(output, "w") as f:
+        for s in samples:
+            f.write(s["full_name"] + "\n")
 
 
 if __name__ == "__main__":
