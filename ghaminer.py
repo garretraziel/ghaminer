@@ -15,23 +15,40 @@ import github
 
 
 MAX_ID = 30500000  # zjisteno experimentalne
+REPO_INFO = ["id", "full_name", "fork", "stargazers_count", "forks_count", "watchers_count", "open_issues_count",
+             "subscribers_count", "size", "pushed_at", "created_at", "updated_at"]
 
 
 def main(sample_count, output):
     gh = github.GitHub(username=os.getenv("GH_USERNAME"), password=os.getenv("GH_PASSWORD"))
 
-    samples = []
+    used_ids = {}
     remaining = sample_count
-    while remaining > 0:
-        resp = gh.repositories().get(since=random.randrange(MAX_ID))
-        rsample = random.sample(resp, max(remaining, len(resp)))
-
-        samples.extend(rsample)
-        remaining -= len(rsample)
-
+    one_part = 100.0 / sample_count
+    percentage = 0
     with open(output, "w") as f:
-        for s in samples:
-            f.write(s["full_name"] + "\n")
+        f.write(" ".join(REPO_INFO) + "\n")
+
+        while remaining > 0:
+            rindex = random.randint(0, MAX_ID)
+            while used_ids.get(rindex, False):
+                rindex = random.randint(0, MAX_ID)
+            used_ids[rindex] = True
+
+            resp = gh.repositories().get(since=rindex)
+
+            k = random.randint(1, min(remaining, len(resp)))
+            rsample = random.sample(resp, k)
+
+            for s in rsample:
+                r = gh.repos(s['owner']['login'])(s['name']).get()
+
+                values = [str(r[attr]) for attr in REPO_INFO]
+                f.write(" ".join(values) + "\n")
+                percentage += one_part
+                print "\r%d %%" % percentage,
+
+            remaining -= len(rsample)
 
 
 if __name__ == "__main__":
