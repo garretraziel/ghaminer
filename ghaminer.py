@@ -16,7 +16,20 @@ import github
 
 MAX_ID = 30500000  # zjisteno experimentalne
 REPO_INFO = ["id", "full_name", "fork", "stargazers_count", "forks_count", "watchers_count", "open_issues_count",
-             "subscribers_count", "size", "pushed_at", "created_at", "updated_at"]
+             "subscribers_count", "pushed_at", "created_at", "updated_at"]
+
+# tyto prvky tam muzou byt nezavisle na case:
+# id full_name fork created_at
+# tyto prvky budu muset omezit casem:
+# stargazers_count forks_count watchers_count open_issues_count subscribers_count pushed_at
+
+
+def get_repo_stats(gh, login, name):
+    r = gh.repos(login)(name).get()
+
+    values = [str(r[attr]) for attr in REPO_INFO]
+
+    return values
 
 
 def main(sample_count, output):
@@ -36,19 +49,35 @@ def main(sample_count, output):
             used_ids[rindex] = True
 
             resp = gh.repositories().get(since=rindex)
+            s = resp[0]
 
-            k = random.randint(1, min(remaining, len(resp)))
-            rsample = random.sample(resp, k)
+            stats = get_repo_stats(gh, s['owner']['login'], s['name'])
 
-            for s in rsample:
-                r = gh.repos(s['owner']['login'])(s['name']).get()
+            f.write(" ".join(stats) + "\n")
 
-                values = [str(r[attr]) for attr in REPO_INFO]
-                f.write(" ".join(values) + "\n")
-                percentage += one_part
-                print "\r%d %%" % percentage,
+            # dale:
+            # repository events https://developer.github.com/v3/activity/events/#list-repository-events
+            # repository issue events https://developer.github.com/v3/activity/events/#list-issue-events-for-a-repository
+            # contributors statistics https://developer.github.com/v3/repos/statistics/#contributors
+            # last year commit activity https://developer.github.com/v3/repos/statistics/#commit-activity
+            # code frequency https://developer.github.com/v3/repos/statistics/#code-frequency
+            # participation https://developer.github.com/v3/repos/statistics/#participation
+            # punch card https://developer.github.com/v3/repos/statistics/#punch-card
+            # contributors https://developer.github.com/v3/repos/#list-contributors and https://developer.github.com/v3/activity/events/#list-events-performed-by-a-user
+            # git data?
+            # issues for repository https://developer.github.com/v3/issues/#list-issues-for-a-repository
+            # pozor na pull request
+            # assignees? https://developer.github.com/v3/issues/assignees/
+            # organizations bude asi jeste trochu problem
+            # pull request https://developer.github.com/v3/pulls/ bude mozna dost spojenej s issues?
+            # collaborators a jejich aktivita https://developer.github.com/v3/repos/collaborators/#list
+            # commit comments collaboratoru? tohle prozkoumat jeste https://developer.github.com/v3/repos/comments/#list-commit-comments-for-a-repository
+            # commity https://developer.github.com/v3/repos/commits/#list-commits-on-a-repository
 
-            remaining -= len(rsample)
+            percentage += one_part
+            print "\r%d %%" % percentage,
+
+            remaining -= 1
 
 
 if __name__ == "__main__":
