@@ -12,22 +12,28 @@ import argparse
 import random
 
 import github
-
+from dateutil.parser import parse
 
 MAX_ID = 30500000  # zjisteno experimentalne
-REPO_INFO = ["id", "full_name", "fork", "stargazers_count", "forks_count", "watchers_count", "open_issues_count",
-             "subscribers_count", "pushed_at", "created_at", "updated_at"]
+DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
+OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
+                   "subscribers_count", "updated_at", "pushed_at"]
 
 # tyto prvky tam muzou byt nezavisle na case:
 # id full_name fork created_at
 # tyto prvky budu muset omezit casem:
 # stargazers_count forks_count watchers_count open_issues_count subscribers_count pushed_at
 
+def is_old_enough(date):
+    return date - datetime.datetime.now() > datetime.timedelta(weeks=20)
+
 
 def get_repo_stats(gh, login, name):
     r = gh.repos(login)(name).get()
+    values = [str(r[attr]) for attr in DIRECT_REPO_INFO]
 
-    values = [str(r[attr]) for attr in REPO_INFO]
+    timespan = (parse(r["created_at"]), parse(r["pushed_at"]))
+    is_old = is_old_enough(timespan[1])
 
     return values
 
@@ -40,7 +46,7 @@ def main(sample_count, output):
     one_part = 100.0 / sample_count
     percentage = 0
     with open(output, "w") as f:
-        f.write(" ".join(REPO_INFO) + "\n")
+        f.write(" ".join(DIRECT_REPO_INFO) + "\n")
 
         while remaining > 0:
             rindex = random.randint(0, MAX_ID)
