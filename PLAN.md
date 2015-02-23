@@ -38,3 +38,4 @@
 - aktivita bude podmíněná zasíláním kódu - cokoliv jiného - komentáře, labelování, vytváření wiki... nebude bráno jako aktivita projektu (tohle by chtělo nejdřív konzultovat)
 - aktivní projekt je tedy takový, do kterého bude v budoucnu zaslán commit
 - to znamená, že musím brát historii a "stav repozitáře ke dni X"
+- problém: když mi zbývá jen jeden commit v budoucnu, označím projekt jako "aktivní", ale hodnoty budou skoro stejné, jako u mrtvého

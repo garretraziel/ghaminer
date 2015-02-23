@@ -10,11 +10,14 @@
 import os
 import argparse
 import random
+import datetime
 
 import github
 from dateutil.parser import parse
+from dateutil.relativedelta import relativedelta
+import pytz
 
-MAX_ID = 30500000  # zjisteno experimentalne
+MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
                    "subscribers_count", "updated_at", "pushed_at"]
@@ -25,15 +28,22 @@ OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_is
 # stargazers_count forks_count watchers_count open_issues_count subscribers_count pushed_at
 
 def is_old_enough(date):
-    return date - datetime.datetime.now() > datetime.timedelta(weeks=20)
+    # TODO: tohle musim obhajit. proc pulrok?
+    return date < pytz.UTC.localize(datetime.datetime.now()) - relativedelta(months=6)
 
 
 def get_repo_stats(gh, login, name):
     r = gh.repos(login)(name).get()
     values = [str(r[attr]) for attr in DIRECT_REPO_INFO]
 
-    timespan = (parse(r["created_at"]), parse(r["pushed_at"]))
-    is_old = is_old_enough(timespan[1])
+    begin = parse(r["created_at"])
+    end = parse(r["pushed_at"])
+    half = begin + (end - begin)/2
+    timepoint = None
+    if is_old_enough(end):
+        timepoint = random.choice([half, end])
+    else:
+        timepoint = end
 
     return values
 
