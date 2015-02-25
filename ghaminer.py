@@ -32,6 +32,35 @@ def is_old_enough(date):
     return date < pytz.UTC.localize(datetime.datetime.now()) - relativedelta(months=6)
 
 
+def compute_code_freq(gh, login, name, time):
+    """ f_comm(t) = C_comm(t)/(t - t_0)
+    tudiz, frekvence commitu v case t je pocet commitu,
+    co byly zaslany do casu t deleno dobou, jak dlouho
+    byly zasilany
+    [f_comm] = commit/den
+
+    :param gh:
+    :param login:
+    :param name:
+    :param time:
+    :return:
+    """
+
+
+def compute_activity(gh, login, name, time):
+    """
+    spocita aktivitu projektu v dany cas
+
+    aktivita(t) = f_comm(t)/f_comm(t_end)
+
+    :param gh:
+    :param login:
+    :param name:
+    :param time:
+    :return:
+    """
+
+
 def get_repo_stats(gh, login, name):
     r = gh.repos(login)(name).get()
     values = [str(r[attr]) for attr in DIRECT_REPO_INFO]
@@ -39,11 +68,14 @@ def get_repo_stats(gh, login, name):
     begin = parse(r["created_at"])
     end = parse(r["pushed_at"])
     half = begin + (end - begin)/2
-    timepoint = None
     if is_old_enough(end):
         timepoint = random.choice([half, end])
     else:
         timepoint = end
+
+    print timepoint
+    print begin
+    print end
 
     return values
 
