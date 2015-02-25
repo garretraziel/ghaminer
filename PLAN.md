@@ -61,3 +61,10 @@
   že projekt aktivní není (protože frekvence commitů se bude vždy už jenom snižovat), ale na konci života projektu bude říkat,
   že je aktivita slušná (když třeba poslední commit projektu pošlou dostatečně brzo, tudíž bude frekvence na konci vyšší,
   než aktuální frekvence)
+  
+#### Řešení
+
+- šlo by:
+    1) v podílu místo f_comm(t_end) počítat s f_comm(t_příští-commit)
+    2) v podílu místo f_comm(t_end) počítat s nejvyšší frekvencí f_max
+- asi použiji variantu 2) - stejně znám celou historii repozitáře, taky díky tomu získám číslo od 0 do 1
