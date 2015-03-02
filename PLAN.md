@@ -8,11 +8,10 @@
 ## Jak budu brát data pro dolování
 
 - napíšu crawler, který bude zjišťovat statistiky k repozitářům - střední doma čekání na opravu, medián, atp., spíš než jenom raw data
-- crawler bude při clawrování ignorovat budoucí data a zjistí statistiky ke starším datům, následně se podívá i na události do budoucnosti a podle toho klasifikuje "byl aktivní"/"nebyl aktivní"
+- crawler bude při clawrování ignorovat budoucí data a zjistí statistiky ke starším datům, následně se podívá i na události do budoucnosti a podle toho klasifikuje, jak moc bude vyvíjen
 - aktivita by chtěla vyjádřit číslem asi, to by nakonec šlo tak, že bych vzal nejaktivnější v každé kategorii (commity, komentáře, pullrequesty...) a těm dal číslo "100", ostatním rovnoměrně od 0
 - výsledkem bude obří soubor, který bude obsahovat zadaný počet repozitářů a v každém řádku nějaké sumární informace o aktivitě projektu
 - následně můžu použít scikit-learn a už něco doopravdy začít učit
-- jak nad tím přemýšlím, pro "je/není aktivní" můžu použít údaj `updated_at` - pokud je `updated_at` blízko dneška, je aktivní, pro začátek. po poradě s Bartíkem pak můžu i vzít dobu dlouho před `updated_at` a považovat ho v té době za aktivní. možná bych pak mohl předpovídat, jak dlouho ještě aktivní bude?
 
 ## Co budu dolovat
 
@@ -44,7 +43,7 @@
 
 - definuji frekvenci commitů (celkem jednoduše) jako: `f_comm(t) = C_comm(t)/(t - t_0)`
     - frekvence commitů v čase `t` je počet commitů zaslaných do `t` lomeno dobou od začátku projektu do času `t`
-    - jednotka je commitů/den
+    - jednotka je commitů/týden
 - aktivita v čase `t` je pak frekvence commitů v čase `t` lomeno celkovou frekvencí commitů (frekvence commitů v konečném čase `t_end`)
 
 #### Výhody
@@ -75,3 +74,9 @@
 - u forků jsou commity ještě před vytvořením repozitáře - to zamává s aktivitou. počítat s nimi, nebo ne?
 - u forků budu muset brát commity i z předchozího repozitáře, protože podle času created_at nepoznám nic. někdo může nejdřív dlouho psát a commitovat a až potom vytvořit repozitář
 - asi bude problém u repozitářů, kam člověk během jednoho dne nahrál X commitů a tím to skončilo
+
+## Výsledek
+
+- musím si od teď dát pozor na pusu. měním pojmy, se kterými pracuji. aktivita od teď bude okamžitá, definovaná jako počet zaslání za poslední měsíc
+- to co budu ve skutečnosti dolovat je "míra budoucího vývoje projektu", která je definována jako podíl aktivity příštího měsíce a aktuálního měsíce
+    - to znamená, že pokud je větší než jedna, bude aktivita projektu růst, pokud bude jedna, bude stejná, pokud bude menší než jedna, bude aktivita klesat, pokud se bude blížit nule, projekt přestane být aktivní

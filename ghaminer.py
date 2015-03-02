@@ -1,12 +1,5 @@
 #!/usr/bin/env python
 
-# Co bude umet tento program:
-# ---------------------------
-# 1. zadam mu cislo, to vyjadruje pocet repozitaru
-# 2. on z githubarchive zvoli danej pocet projektu pomoci nejake heuristiky,
-# tim ale asi vyuziti githubarchive konci. pouzivat vubec githubarchive? mozna staci timeline
-# 3. k danemu projektu vzdy ziska informace, co se budou pro dolovani pouzivat
-
 import os
 import argparse
 import random
@@ -18,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 import pytz
 
 MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
-ATTRS = ["id", "full_name", "fork", "created_at", "days_active", "time_point", "time_point_freq", "max_freq"]
+ATTRS = ["id", "full_name", "fork", "created_at", "days_active", "last_push", "future_activity"]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
                    "subscribers_count", "updated_at", "pushed_at"]
@@ -39,82 +32,57 @@ def is_old_enough(date):
     return date < pytz.UTC.localize(datetime.datetime.now()) - relativedelta(months=6)
 
 
-def compute_code_freqs(commits, point_in_time, time_created, time_ended):
+def compute_freq_for(commits, time_from, time_to):
     """Vraci frekvence zmen v repozitari - v zadanem case a maximalni
 
     f_comm(t) = C_comm(t)/(t - t_0)
     tudiz, frekvence commitu v case t je pocet commitu,
     co byly zaslany do casu t deleno dobou, jak dlouho
     byly zasilany
-    [f_comm] = commit/den
+    [f_comm] = commit/mesic
 
     :param commits:
-    :param point_in_time:
-    :param time_created:
-    :param time_ended:
+    :param time_from:
+    :param time_to:
     :return:
     """
+    f_date = time_from.date()
+    t_date = time_to.date()
+    commits_in = [c for c in commits if f_date <= dateparse(c['commit']['committer']['date']).date() <= t_date]
+    f_time = float(len(commits_in)) / (((time_to - time_from).days + 1)/31)
 
-    sorted_commits = sorted(commits, key=lambda commit: dateparse(commit['commit']['committer']['date']))
-    first_commit_date = dateparse(sorted_commits[0]['commit']['committer']['date'])
-
-    # problem je, ze u repozitaru, ktere jsou forky, jsou commity i pred tim, nez byl repozitar created
-    # nevim, jestli mam tyto commity zapocitat, nebo ne
-    commits_before = [c for c in sorted_commits if dateparse(c['commit']['committer']['date']) < point_in_time]
-    f_time = float(len(commits_before)) / ((point_in_time - first_commit_date).days + 1)
-
-    f_max = -1
-
-    for i, c in enumerate(sorted_commits):
-        t_commit = dateparse(c['commit']['committer']['date'])
-        f = float(i + 1) / ((t_commit - first_commit_date).days + 1)
-
-        if f > f_max:
-            f_max = f
-
-    return f_time, f_max
-
-
-def compute_activity(gh, login, name, time):
-    """
-    spocita aktivitu projektu v dany cas
-
-    aktivita(t) = f_comm(time) / f_max
-
-    :param gh:
-    :param login:
-    :param name:
-    :param time:
-    :return:
-    """
+    return f_time
 
 
 def get_repo_stats(gh, login, name):
     r = gh.repos(login)(name).get()
     values = [str(r[attr]) for attr in DIRECT_REPO_INFO]  # vyberu to, co mohu ziskat primo, bez zapojeni casu
 
+    commits = gh.repos(login)(name).commits().get()
+    if len(commits) == 0:
+        raise RepoNotValid
+
+    first_commit = min(commits, key=lambda commit: dateparse(commit['commit']['committer']['date']))
+    last_commit = max(commits, key=lambda commit: dateparse(commit['commit']['committer']['date']))
+
     # ziskam informace o casech daneho repozitare
-    time_created = dateparse(r["created_at"])
-    time_ended = dateparse(r["pushed_at"])
+    time_created = dateparse(first_commit['commit']['committer']['date'])
+    time_ended = dateparse(last_commit['commit']['committer']['date'])
     if time_ended < time_created:
         raise RepoNotValid
-    half = time_created + (time_ended - time_created)/2
     if is_old_enough(time_ended):
-        point_in_time = random.choice([half, time_ended])
+        random_days = random.randint(0, (time_ended - time_created).days)
+        point_in_time = time_created + datetime.timedelta(days=random_days)
     else:
         raise RepoNotValid
 
     values.append(str((point_in_time - time_created).days + 1))
     values.append(point_in_time.isoformat())
 
-    commits = gh.repos(login)(name).commits().get()
-    if len(commits) == 0:
-        raise RepoNotValid
+    f_time = compute_freq_for(commits, point_in_time - datetime.timedelta(days=31), point_in_time)
+    f_future = compute_freq_for(commits, point_in_time + datetime.timedelta(days=1), point_in_time + datetime.timedelta(days=32))
 
-    f_time, f_max = compute_code_freqs(commits, point_in_time, time_created, time_ended)
-
-    values.append(str(f_time))
-    values.append(str(f_max))
+    values.append(str(f_future - f_time))
 
     return values
 
@@ -127,7 +95,7 @@ def main(sample_count, output):
     one_part = 100.0 / sample_count
     percentage = 0
     with open(output, "w") as f:
-        f.write(" ".join(ATTRS) + "\n")
+        f.write(", ".join(ATTRS) + "\n")
 
         while remaining > 0:
             rindex = random.randint(0, MAX_ID)
@@ -141,7 +109,7 @@ def main(sample_count, output):
             try:
                 stats = get_repo_stats(gh, s['owner']['login'], s['name'])
 
-                f.write(" ".join(stats) + "\n")
+                f.write(", ".join(stats) + "\n")
 
                 # dale:
                 # repository events https://developer.github.com/v3/activity/events/#list-repository-events
