@@ -68,3 +68,10 @@
     1) v podílu místo f_comm(t_end) počítat s f_comm(t_příští-commit)
     2) v podílu místo f_comm(t_end) počítat s nejvyšší frekvencí f_max
 - asi použiji variantu 2) - stejně znám celou historii repozitáře, taky díky tomu získám číslo od 0 do 1
+
+## Problémy
+
+- nevím, jestli mám aktivitu počítat od prvního commitu, nebo od chvíle, kdy byl repozitář vytvořen
+- u forků jsou commity ještě před vytvořením repozitáře - to zamává s aktivitou. počítat s nimi, nebo ne?
+- u forků budu muset brát commity i z předchozího repozitáře, protože podle času created_at nepoznám nic. někdo může nejdřív dlouho psát a commitovat a až potom vytvořit repozitář
+- asi bude problém u repozitářů, kam člověk během jednoho dne nahrál X commitů a tím to skončilo
