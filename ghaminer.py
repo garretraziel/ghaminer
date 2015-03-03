@@ -11,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 import pytz
 
 MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
-ATTRS = ["id", "full_name", "fork", "created_at", "days_active", "last_push", "future_activity"]
+ATTRS = ["id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit", "future_activity"]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
                    "subscribers_count", "updated_at", "pushed_at"]
@@ -49,7 +49,7 @@ def compute_freq_for(commits, time_from, time_to):
     f_date = time_from.date()
     t_date = time_to.date()
     commits_in = [c for c in commits if f_date <= dateparse(c['commit']['committer']['date']).date() <= t_date]
-    f_time = float(len(commits_in)) / (((time_to - time_from).days + 1)/31)
+    f_time = float(len(commits_in)) / (((time_to - time_from).days + 1)/31.0)
 
     return f_time
 
@@ -67,22 +67,28 @@ def get_repo_stats(gh, login, name):
 
     # ziskam informace o casech daneho repozitare
     time_created = dateparse(first_commit['commit']['committer']['date'])
+    time_repo_created = dateparse(r['created_at'])
     time_ended = dateparse(last_commit['commit']['committer']['date'])
     if time_ended < time_created:
         raise RepoNotValid
     if is_old_enough(time_ended):
-        random_days = random.randint(0, (time_ended - time_created).days)
+        random_days = random.randint(0, (time_ended - time_created).days)  # TODO: forky brat az od forknuti?
         point_in_time = time_created + datetime.timedelta(days=random_days)
     else:
         raise RepoNotValid
 
+    values.append(first_commit['commit']['committer']['date'])
     values.append(str((point_in_time - time_created).days + 1))
     values.append(point_in_time.isoformat())
 
-    f_time = compute_freq_for(commits, point_in_time - datetime.timedelta(days=31), point_in_time)
-    f_future = compute_freq_for(commits, point_in_time + datetime.timedelta(days=1), point_in_time + datetime.timedelta(days=32))
+    # mozna spis pocitat frekvenci od zacatku do bodu v case vs od bodu v case do konce repozitare
+    # ale to prinasi problem: pokud uz zbyva jen posledni commit a ten se commitne zitra, prumer vychazi na 31 commitu mesicne...
+    # reseni - jdu do budoucnosti presne tolik, kolik jsem sel do minulosti (trochu divny, ja vim)
+    f_hist = compute_freq_for(commits, time_created, point_in_time)
+    f_future = compute_freq_for(commits, point_in_time + datetime.timedelta(days=1),
+                                point_in_time + (point_in_time - time_created + datetime.timedelta(days=1)))
 
-    values.append(str(f_future - f_time))
+    values.append(str(f_future/f_hist))
 
     return values
 
