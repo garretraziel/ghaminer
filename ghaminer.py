@@ -12,7 +12,7 @@ import pytz
 
 MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
 ATTRS = ["id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit", "future_activity",
-         "percentage_remains"]
+         "percentage_remains", "commits"]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
                    "subscribers_count", "updated_at", "pushed_at"]
@@ -70,6 +70,47 @@ def compute_remaining_percentage(commits, point_in_time):
     return float(len(commits_after)) / len(commits)
 
 
+def compute_freq_activity(commits, time_created, time_ended, point_in_time):
+    """Vraci miru aktivity spoctenou podle frekvenci
+
+    :param list[dict] commits: seznam vsech zmen v repozitari
+    :param datetime.datetime time_created: cas prvniho commitu v repozitari
+    :param datetime.datetime time_ended: cas posledniho commitu v repozitari
+    :param datetime.datetime point_in_time: cas ve kterem se ma aktivita pocitat
+    :return: mira aktivity dle frekvenci
+    :rtype: float
+    """
+    if is_old_enough(time_ended):
+        # ziskam casove vzdalenosti
+        begin_to_point = point_in_time - time_created
+        point_to_end = time_ended - point_in_time
+
+        # frekvence od zacatku je jednoduse frekvence commitu za den od prvniho commitu do aktualniho dne
+        f_hist = compute_freq_for(commits, time_created, point_in_time)
+        one_day = datetime.timedelta(days=1)
+
+        # if begin_to_point < point_to_end:
+            # jeste nejsme v pulce zivota projektu
+            # frekvence do konce je jednoduse frekvence od aktualniho dne do posledniho commitu
+            # f_future = compute_freq_for(commits, point_in_time + one_day, time_ended + one_day)
+        # else:
+            # uz jsme za pulkou. zacneme zohlednovat konec
+            # konec intervalu pokladame dal a dal za posledni commit, tim "umele" snizujeme frekvenci, protoze
+            # do repozitare prestali prispivat
+        f_future = compute_freq_for(commits, point_in_time + one_day, point_in_time + one_day + begin_to_point)
+
+        return f_future / f_hist
+    else:
+        # pokud se projekt stale vyviji, nemohu pouzit frekvence
+        return -1
+
+
+def compute_perc_activity(commits, point_in_time):
+    # spocitam, kolik procent commitu v zadanem bode v case jeste zbyvalo
+    percent = compute_remaining_percentage(commits, point_in_time)
+    return percent*100
+
+
 def get_repo_stats(gh, login, name):
     # ziskej informace o repozitari
     r = gh.repos(login)(name).get()
@@ -77,7 +118,15 @@ def get_repo_stats(gh, login, name):
     values = [str(r[attr]) for attr in DIRECT_REPO_INFO]
 
     # ziskam seznam vsech commitu
-    commits = gh.repos(login)(name).commits().get()
+    page = 1
+    commits = []
+    while True:
+        result = gh.repos(login)(name).commits().get(page=page)
+        if len(result) > 0:
+            commits.extend(result)
+            page += 1
+        else:
+            break
     if len(commits) == 0:
         raise RepoNotValid  # prazdny repozitar je k nicemu
 
@@ -97,33 +146,14 @@ def get_repo_stats(gh, login, name):
     values.append(str((point_in_time - time_created).days + 1))
     values.append(point_in_time.isoformat())
 
-    if is_old_enough(time_ended):
-        # ziskam casove vzdalenosti
-        begin_to_point = point_in_time - time_created
-        point_to_end = time_ended - point_in_time
+    # ziskam aktivitu v bode podle frekvenci
+    values.append(str(compute_freq_activity(commits, time_created, time_ended, point_in_time)))
 
-        # frekvence od zacatku je jednoduse frekvence commitu za den od prvniho commit do aktualniho dne
-        f_hist = compute_freq_for(commits, time_created, point_in_time)
-        one_day = datetime.timedelta(days=1)
+    # ziskam aktivitu v bode podle procent
+    values.append(str(compute_perc_activity(commits, point_in_time)))
 
-        if begin_to_point < point_to_end:
-            # jeste nejsme v pulce zivota projektu
-            # frekvence do konce je jednoduse frekvence od aktualniho dne do posledniho commitu
-            f_future = compute_freq_for(commits, point_in_time + one_day, time_ended + one_day)
-        else:
-            # uz jsme za pulkou. zacneme zohlednovat konec
-            # konec intervalu pokladame dal a dal za posledni commit, tim "umele" snizujeme frekvenci, protoze
-            # do repozitare prestali prispivat
-            f_future = compute_freq_for(commits, point_in_time + one_day, point_in_time + one_day + begin_to_point)
-
-        values.append(str(f_future / f_hist))
-    else:
-        # pokud se projekt stale vyviji, nemohu pouzit frekvence
-        values.append("-")
-
-    # spocitam, kolik procent commitu v zadanem bode v case jeste zbyvalo
-    percent = compute_remaining_percentage(commits, point_in_time)
-    values.append(str(percent*100))
+    commits_before = [c for c in commits if parse_date(c['commit']['committer']['date']) <= point_in_time]
+    values.append(str(len(commits_before)))
 
     return values
 
