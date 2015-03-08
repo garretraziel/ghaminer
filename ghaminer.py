@@ -11,14 +11,14 @@ from dateutil.relativedelta import relativedelta
 import pytz
 
 MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
-ATTRS = ["id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit", "future_activity",
-         "percentage_remains", "commits"]
+ATTRS = ["id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit", "commits_count",
+         "freq_1w", "freq_1m", "freq_6m", "freq_1y", "freq_all",
+         "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
                    "subscribers_count", "updated_at", "pushed_at"]
+one_day = datetime.timedelta(days=1)
 
-# tyto prvky tam muzou byt nezavisle na case:
-# id full_name fork created_at
 # tyto prvky budu muset omezit casem:
 # stargazers_count forks_count watchers_count open_issues_count subscribers_count pushed_at
 
@@ -27,10 +27,17 @@ class RepoNotValid(Exception):
     """Repozitar neni validni - neni vhodny pro dolovani (neobsahuje data...)"""
 
 
-def is_old_enough(date):
+def is_old_enough(date, timespan=relativedelta(months=6), now=pytz.UTC.localize(datetime.datetime.now())):
+    """Vraci, zda je repozitar dostatecne stary na to, aby mohl byt pouzit.
+
+    :param datetime.datetime date: datum posledniho zaslani zmeny do repozitare
+    :param relativedelta timespan: jak moc stary ma repozitar byt
+    :return: informaci, zda je repozitar dostatecne stary
+    :rtype: bool
+    """
     # TODO: tohle musim obhajit. proc pulrok?
     # az ziskam nejaka data, musim vyzkouset, ze pulrok doopravdy staci
-    return date < pytz.UTC.localize(datetime.datetime.now()) - relativedelta(months=6)
+    return (date + timespan) < now
 
 
 def compute_freq_for(commits, time_from, time_to):
@@ -58,7 +65,7 @@ def compute_freq_for(commits, time_from, time_to):
     return f_time
 
 
-def compute_remaining_percentage(commits, point_in_time):
+def compute_perc_activity(commits, point_in_time):
     """Vraci procento projektu, ktere v zadanem case jeste zbyva.
 
     :param list[dict] commits: seznam vsech zmen v repozitari
@@ -67,36 +74,32 @@ def compute_remaining_percentage(commits, point_in_time):
     :rtype: float
     """
     commits_after = [c for c in commits if point_in_time < parse_date(c['commit']['committer']['date'])]
-    return float(len(commits_after)) / len(commits)
+    return float(len(commits_after)) / len(commits) * 100
 
 
-def compute_freq_activity(commits, time_created, time_ended, point_in_time):
+def compute_freq_activity(commits, point_in_time):
     """Vraci miru aktivity spoctenou podle frekvenci
 
     :param list[dict] commits: seznam vsech zmen v repozitari
-    :param datetime.datetime time_created: cas prvniho commitu v repozitari
-    :param datetime.datetime time_ended: cas posledniho commitu v repozitari
     :param datetime.datetime point_in_time: cas ve kterem se ma aktivita pocitat
     :return: mira aktivity dle frekvenci
     :rtype: float
     """
+    # ziskam data prvniho a posledniho zaslani zmen do repozitare
+    first_commit = min(commits, key=lambda commit: parse_date(commit['commit']['committer']['date']))
+    last_commit = max(commits, key=lambda commit: parse_date(commit['commit']['committer']['date']))
+
+    # ziskam informace o casech daneho repozitare
+    time_created = parse_date(first_commit['commit']['committer']['date'])
+    time_ended = parse_date(last_commit['commit']['committer']['date'])
+
     if is_old_enough(time_ended):
         # ziskam casove vzdalenosti
         begin_to_point = point_in_time - time_created
-        point_to_end = time_ended - point_in_time
 
         # frekvence od zacatku je jednoduse frekvence commitu za den od prvniho commitu do aktualniho dne
         f_hist = compute_freq_for(commits, time_created, point_in_time)
-        one_day = datetime.timedelta(days=1)
 
-        # if begin_to_point < point_to_end:
-            # jeste nejsme v pulce zivota projektu
-            # frekvence do konce je jednoduse frekvence od aktualniho dne do posledniho commitu
-            # f_future = compute_freq_for(commits, point_in_time + one_day, time_ended + one_day)
-        # else:
-            # uz jsme za pulkou. zacneme zohlednovat konec
-            # konec intervalu pokladame dal a dal za posledni commit, tim "umele" snizujeme frekvenci, protoze
-            # do repozitare prestali prispivat
         f_future = compute_freq_for(commits, point_in_time + one_day, point_in_time + one_day + begin_to_point)
 
         return f_future / f_hist
@@ -105,10 +108,22 @@ def compute_freq_activity(commits, time_created, time_ended, point_in_time):
         return -1
 
 
-def compute_perc_activity(commits, point_in_time):
-    # spocitam, kolik procent commitu v zadanem bode v case jeste zbyvalo
-    percent = compute_remaining_percentage(commits, point_in_time)
-    return percent*100
+def compute_delta_freq_activity(commits, point_in_time, future_time_delta):
+    """Vraci miru aktivity spoctenou podle budouci frekvence.
+
+    :param list[dict] commits: seznam vsech zmen v repozitari
+    :param datetime.datetime point_in_time: cas ve kterem se ma aktivita pocitat
+    :param relativedelta future_time_delta: casove rozmezi, pro ktere se ma aktivita pocitat
+    :return: mira aktivita dle budouci frekvence
+    :rtype: float
+    """
+    if is_old_enough(point_in_time, future_time_delta):
+        start = min(point_in_time, point_in_time + future_time_delta)
+        end = max(point_in_time, point_in_time + future_time_delta)
+        f = compute_freq_for(commits, start, end)
+        return f
+    else:
+        return -1
 
 
 def get_repo_stats(gh, login, name):
@@ -136,24 +151,44 @@ def get_repo_stats(gh, login, name):
 
     # ziskam informace o casech daneho repozitare
     time_created = parse_date(first_commit['commit']['committer']['date'])
-    time_repo_created = parse_date(r['created_at'])
     time_ended = parse_date(last_commit['commit']['committer']['date'])
+    values.append(first_commit['commit']['committer']['date'])
 
     # ziskam nahodny bod v prubehu vyvoje projektu
     random_days = random.randint(0, (time_ended - time_created).days)  # TODO: forky brat az od forknuti?
     point_in_time = time_created + datetime.timedelta(days=random_days)
-    values.append(first_commit['commit']['committer']['date'])
-    values.append(str((point_in_time - time_created).days + 1))
+    duration = (point_in_time - time_created).days + 1
+    values.append(str(duration))
     values.append(point_in_time.isoformat())
 
+    # ziskam pocet commitu do daneho data
+    commits_before = [c for c in commits if parse_date(c['commit']['committer']['date']) <= point_in_time]
+    values.append(str(len(commits_before)))
+
+    # ziskam frekvenci commitu za posledni tyden, mesic, pulrok, rok, celkovou dobu
+    values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(weeks=-1))))
+    values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(months=-1))))
+    values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(months=-6))))
+    values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(years=-1))))
+    values.append(str(compute_freq_for(commits, time_created, point_in_time)))
+
     # ziskam aktivitu v bode podle frekvenci
-    values.append(str(compute_freq_activity(commits, time_created, time_ended, point_in_time)))
+    values.append(str(compute_freq_activity(commits, point_in_time)))
 
     # ziskam aktivitu v bode podle procent
     values.append(str(compute_perc_activity(commits, point_in_time)))
 
-    commits_before = [c for c in commits if parse_date(c['commit']['committer']['date']) <= point_in_time]
-    values.append(str(len(commits_before)))
+    # ziskam aktivitu podle frekvence v pristim tydnu
+    values.append(str(compute_delta_freq_activity(commits, point_in_time + one_day, relativedelta(weeks=1))))
+
+    # ziskam aktivitu podle frekvence v pristim mesici
+    values.append(str(compute_delta_freq_activity(commits, point_in_time + one_day, relativedelta(months=1))))
+
+    # ziskam aktivitu podle frekvence v pristim pulroce
+    values.append(str(compute_delta_freq_activity(commits, point_in_time + one_day, relativedelta(months=6))))
+
+    # ziskam aktivitu podle frekvence v pristim roce
+    values.append(str(compute_delta_freq_activity(commits, point_in_time + one_day, relativedelta(years=1))))
 
     return values
 
@@ -201,7 +236,6 @@ def main(sample_count, output):
                 # pull request https://developer.github.com/v3/pulls/ bude mozna dost spojenej s issues?
                 # collaborators a jejich aktivita https://developer.github.com/v3/repos/collaborators/#list
                 # commit comments collaboratoru? tohle prozkoumat jeste https://developer.github.com/v3/repos/comments/#list-commit-comments-for-a-repository
-                # commity https://developer.github.com/v3/repos/commits/#list-commits-on-a-repository
 
                 percentage += one_part
                 print "\r%d %%" % percentage,
