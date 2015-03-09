@@ -27,6 +27,24 @@ class RepoNotValid(Exception):
     """Repozitar neni validni - neni vhodny pro dolovani (neobsahuje data...)"""
 
 
+def download_all(download_obj, **kwargs):
+    """Vola prikaz pro ziskani dat opakovane se zvysujicim se argumentem page.
+
+    :param download_obj: objekt, ktery se ma pouzit pro ziskani dat
+    :return: ziskana data
+    """
+    page = 1
+    values = []
+    while True:
+        result = download_obj.get(page=page, **kwargs)
+        if len(result) > 0:
+            values.extend(result)
+            page += 1
+        else:
+            break
+    return values
+
+
 def is_old_enough(date, timespan=relativedelta(months=6), now=pytz.UTC.localize(datetime.datetime.now())):
     """Vraci, zda je repozitar dostatecne stary na to, aby mohl byt pouzit.
 
@@ -130,24 +148,16 @@ def compute_delta_freq_activity(commits, point_in_time, future_time_delta):
         return -1
 
 
-def get_repo_stats(gh, login, name):
-    ## Obecne informace
-    # ziskej informace o repozitari
-    r = gh.repos(login)(name).get()
-    # vyberu to, co mohu ziskat primo, bez zapojeni casu
-    values = [str(r[attr]) for attr in DIRECT_REPO_INFO]
+def get_all_commits(gh, login, name):
+    """Vrati pole vsech commitu a informace o vytvoreni zadaneho repozitare.
 
-    ## Informace o commitech
-    # ziskam seznam vsech commitu
-    page = 1
-    commits = []
-    while True:
-        result = gh.repos(login)(name).commits().get(page=page)
-        if len(result) > 0:
-            commits.extend(result)
-            page += 1
-        else:
-            break
+    :param github.GitHub gh: instance objektu GitHub
+    :param string login: login vlastnika repozitare
+    :param string name: nazev repozitare
+    :return: pole vsech commitu, udaje o trvani repozitare
+    :rtype: list[dict], datetime.datetime, datetime.datetime
+    """
+    commits = download_all(gh.repos(login)(name).commits())
     if len(commits) == 0:
         raise RepoNotValid  # prazdny repozitar je k nicemu
 
@@ -158,15 +168,20 @@ def get_repo_stats(gh, login, name):
     # ziskam informace o casech daneho repozitare
     time_created = parse_date(first_commit['commit']['committer']['date'])
     time_ended = parse_date(last_commit['commit']['committer']['date'])
-    values.append(first_commit['commit']['committer']['date'])
 
-    # ziskam nahodny bod v prubehu vyvoje projektu
-    random_days = random.randint(0, (time_ended - time_created).days)  # TODO: forky brat az od forknuti?
-    point_in_time = time_created + datetime.timedelta(days=random_days)
-    duration = (point_in_time - time_created).days + 1
-    values.append(str(duration))
-    values.append(point_in_time.isoformat())
+    return commits, time_created, time_ended
 
+
+def get_commits_stats(commits, time_created, point_in_time):
+    """Ziska mozne statistiky o commitec k repozitari v zadany cas.
+
+    :param list[dict] commits: pole vsech commitu do repozitare
+    :param datetime.datetime time_created: cas vytvoreni repozitare
+    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :return: pole hodnot, ktere se maji pridat k atributum objektu
+    :rtype: list
+    """
+    values = []
     # ziskam pocet commitu do daneho data
     commits_before = [c for c in commits if parse_date(c['commit']['committer']['date']) <= point_in_time]
     values.append(str(len(commits_before)))
@@ -177,27 +192,58 @@ def get_repo_stats(gh, login, name):
     values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(months=-6))))
     values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(years=-1))))
     values.append(str(compute_freq_for(commits, time_created, point_in_time)))
+    return values
+
+
+def get_repo_stats(gh, login, name):
+    """Ziska veskere statistiky k zadanemu repozitari.
+
+    :param github.GitHub gh: instance objektu GitHub
+    :param string login: login vlastnika repozitare
+    :param string name: nazev repozitare
+    :return: seznam vsech atributu repozitare
+    :rtype: list
+    """
+    ## Obecne informace
+    # ziskej informace o repozitari
+    r = gh.repos(login)(name).get()
+    # vyberu to, co mohu ziskat primo, bez zapojeni casu
+    values = [str(r[attr]) for attr in DIRECT_REPO_INFO]
+
+    ## Informace o commitech
+    # ziskam seznam vsech commitu
+    commits, time_created, time_ended = get_all_commits(gh, login, name)
+
+    values.append(time_created.isoformat())
+
+    # ziskam nahodny bod v prubehu vyvoje projektu
+    random_days = random.randint(0, (time_ended - time_created).days)  # TODO: forky brat az od forknuti?
+    point_in_time = time_created + datetime.timedelta(days=random_days)
+    duration = (point_in_time - time_created).days + 1
+    values.append(str(duration))
+    values.append(point_in_time.isoformat())
+
+    # ziskam dalsi statistiky o commitech
+    values.extend(get_commits_stats(commits, time_created, point_in_time))
 
     ## Informace o issues
     # ziskam seznam vsech issues a pull requestu
-    page = 1
-    issues_pulls = []
-    while True:
-        result = gh.repos(login)(name).issues(state="all", direction="asc").get(page=page)
-        if len(result) > 0:
-            issues_pulls.extend(result)
-            page += 1
-        else:
-            break
+    issues_pulls = download_all(gh.repos(login)(name).issues(), state="all", direction="asc")
 
     # roztridim na issues a pull requests
-    issues = []
-    pulls = []
-    for i in issues_pulls:
-        if 'pull_request' in i:
-            pulls.append(i)
+    issues = {}
+    pulls = {}
+    for p in issues_pulls:
+        if 'pull_request' in p:
+            pulls[p] = []
         else:
-            issues.append(i)
+            issues[p] = []
+
+    for i in issues.keys():
+        issues[i] = download_all(gh.repos(login)(name).issues()(i['number']).comments())
+
+    for p in pulls.keys():
+        pulls[p] = download_all(gh.repos(login)(name).issues()(p['number']).comments())
 
     ## Hodnoty pro predikci:
     # ziskam aktivitu v bode podle frekvenci
@@ -222,6 +268,11 @@ def get_repo_stats(gh, login, name):
 
 
 def main(sample_count, output):
+    """Hlavni funkce programu. Do vystupu zapise statistky o `sample_count` nahodnych repozitaru.
+
+    :param int sample_count: pocet nahodnych repozitaru, ktere ma program najit
+    :param string output: nazev vystupniho souboru
+    """
     gh = github.GitHub(username=os.getenv("GH_USERNAME"), password=os.getenv("GH_PASSWORD"))
 
     used_ids = {}
