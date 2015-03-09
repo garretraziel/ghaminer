@@ -118,7 +118,11 @@ def compute_delta_freq_activity(commits, point_in_time, future_time_delta):
     :rtype: float
     """
     if is_old_enough(point_in_time, future_time_delta):
+        first_commit = min(commits, key=lambda commit: parse_date(commit['commit']['committer']['date']))
+        time_created = parse_date(first_commit['commit']['committer']['date'])
+
         start = min(point_in_time, point_in_time + future_time_delta)
+        start = max(start, time_created)
         end = max(point_in_time, point_in_time + future_time_delta)
         f = compute_freq_for(commits, start, end)
         return f
@@ -127,11 +131,13 @@ def compute_delta_freq_activity(commits, point_in_time, future_time_delta):
 
 
 def get_repo_stats(gh, login, name):
+    ## Obecne informace
     # ziskej informace o repozitari
     r = gh.repos(login)(name).get()
     # vyberu to, co mohu ziskat primo, bez zapojeni casu
     values = [str(r[attr]) for attr in DIRECT_REPO_INFO]
 
+    ## Informace o commitech
     # ziskam seznam vsech commitu
     page = 1
     commits = []
@@ -172,6 +178,28 @@ def get_repo_stats(gh, login, name):
     values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(years=-1))))
     values.append(str(compute_freq_for(commits, time_created, point_in_time)))
 
+    ## Informace o issues
+    # ziskam seznam vsech issues a pull requestu
+    page = 1
+    issues_pulls = []
+    while True:
+        result = gh.repos(login)(name).issues(state="all", direction="asc").get(page=page)
+        if len(result) > 0:
+            issues_pulls.extend(result)
+            page += 1
+        else:
+            break
+
+    # roztridim na issues a pull requests
+    issues = []
+    pulls = []
+    for i in issues_pulls:
+        if 'pull_request' in i:
+            pulls.append(i)
+        else:
+            issues.append(i)
+
+    ## Hodnoty pro predikci:
     # ziskam aktivitu v bode podle frekvenci
     values.append(str(compute_freq_activity(commits, point_in_time)))
 
