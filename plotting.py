@@ -30,7 +30,7 @@ first = times[0]
 last = times[-1]
 
 print "getting freq ratio"
-freqs = [ghaminer.compute_freq_activity(commits, (first + datetime.timedelta(days=r))) for r in range(timespan)]
+freqs = [ghaminer.compute_commit_freq_activity(commits, (first + datetime.timedelta(days=r))) for r in range(timespan)]
 print "getting percentage"
 percs = [ghaminer.compute_perc_activity(commits, (first + datetime.timedelta(days=r))) for r in range(timespan)]
 print "getting 1w freq"
