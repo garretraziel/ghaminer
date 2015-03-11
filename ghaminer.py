@@ -18,6 +18,8 @@ DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
                    "subscribers_count", "updated_at", "pushed_at"]
 one_day = datetime.timedelta(days=1)
+get_commit_date = lambda x: parse_date(x['commit']['committer']['date']).date()
+get_issues_date = lambda x: parse_date(x['created_at']).date()
 
 # tyto prvky budu muset omezit casem:
 # stargazers_count forks_count watchers_count open_issues_count subscribers_count pushed_at
@@ -48,120 +50,96 @@ def download_all(download_obj, **kwargs):
 def is_old_enough(date, timespan=relativedelta(months=6), now=pytz.UTC.localize(datetime.datetime.now())):
     """Vraci, zda je repozitar dostatecne stary na to, aby mohl byt pouzit.
 
-    :param datetime.datetime date: datum posledniho zaslani zmeny do repozitare
+    :param datetime.date date: datum posledniho zaslani zmeny do repozitare
     :param relativedelta timespan: jak moc stary ma repozitar byt
     :return: informaci, zda je repozitar dostatecne stary
     :rtype: bool
     """
     # TODO: tohle musim obhajit. proc pulrok?
     # az ziskam nejaka data, musim vyzkouset, ze pulrok doopravdy staci
-    return (date + timespan) < now
+    return (date + timespan) < now.date()
 
 
-def compute_freq_for_func(values, get_date_func, time_from, time_to):
+def compute_freq_func(values, get_date_func, time_from, time_to):
     """Vraci frekvence udalosti, ktere muze ziskat dle zadane funkce
 
-    :param list[dict] values: seznam vsech udalosti
+    :param [dict] values: seznam vsech udalosti
     :param function get_date_func: funkce, ktera ziska casovy udaj z jedne udalosti
-    :param datetime.datetime time_from: cas od ktereho se ma frekvence pocitat
-    :param datetime.datetime time_to: cas do ktereho se ma frekvence pocitat
+    :param datetime.date time_from: cas od ktereho se ma frekvence pocitat
+    :param datetime.date time_to: cas do ktereho se ma frekvence pocitat
     :return: frekvenci udalosti v repozitari v zadanem casovem rozpeti
     :rtype: float
     """
-    # pracuju ve "dnech"
-    f_date = time_from.date()
-    t_date = time_to.date()
     # ziskam seznam udalosti v danem casovem rozmezi
-    values_in = [v for v in values if f_date <= get_date_func(v) <= t_date]
+    values_in = [v for v in values if time_from <= get_date_func(v) <= time_to]
     f_time = float(len(values_in)) / ((time_to - time_from).days + 1)
 
     return f_time
 
 
-def compute_freq_for_commits(commits, time_from, time_to):
-    """Vraci frekvence zmen v repozitari v zadanem casovem rozpeti.
+def compute_delta_freq_func(values, get_date_func, point_in_time, future_time_delta):
+    """Vraci frekvenci udalosti pro zadane casove rozpeti.
 
-    f_comm(t) = C_comm(t)/(t - t_0)
-    tudiz, frekvence commitu v case t je pocet commitu,
-    co byly zaslany do casu t deleno dobou, jak dlouho
-    byly zasilany
-    [f_comm] = commit/den
-
-    :param list[dict] commits: seznam vsech zmen v repozitari
-    :param datetime.datetime time_from: cas od ktereho se ma frekvence pocitat
-    :param datetime.datetime time_to: cas do ktereho se ma frekvence pocitat
-    :return: frekvenci zmen v repozitari v zadanem casovem rozpeti
+    :param [dict] values: seznam vsech udalosti
+    :param function get_date_func: funkce pro ziskani data z hodnoty
+    :param datetime.date point_in_time: cas ve kterem se ma frekvence pocitat
+    :param relativedelta future_time_delta: casove rozmezi, pro ktere se ma frekvence pocitat
+    :return: frekvence udalosti v zadanem casovem rozmezi
     :rtype: float
     """
+    if is_old_enough(point_in_time, future_time_delta):
+        first_commit = min(values, key=get_date_func)
+        time_created = get_date_func(first_commit)
 
-    get_date_func = lambda x: parse_date(x['commit']['committer']['date']).date()
-    f_time = compute_freq_for_func(commits, get_date_func, time_from, time_to)
-
-    return f_time
+        start = min(point_in_time, point_in_time + future_time_delta)
+        start = max(start, time_created)
+        end = max(point_in_time, point_in_time + future_time_delta)
+        f = compute_freq_func(values, get_date_func, start, end)
+        return f
+    else:
+        return -1
 
 
 def compute_perc_activity(commits, point_in_time):
     """Vraci procento projektu, ktere v zadanem case jeste zbyva.
 
-    :param list[dict] commits: seznam vsech zmen v repozitari
-    :param datetime.datetime point_in_time: cas ve kterem se ma procento pocitat
+    :param [dict] commits: seznam vsech zmen v repozitari
+    :param datetime.date point_in_time: cas ve kterem se ma procento pocitat
     :return: procento projektu, ktere zbyva v zadanem case
     :rtype: float
     """
-    commits_after = [c for c in commits if point_in_time < parse_date(c['commit']['committer']['date'])]
+    commits_after = [c for c in commits if point_in_time < get_commit_date(c)]
     return float(len(commits_after)) / len(commits) * 100
 
 
 def compute_commit_freq_activity(commits, point_in_time):
     """Vraci miru aktivity spoctenou podle frekvenci
 
-    :param list[dict] commits: seznam vsech zmen v repozitari
-    :param datetime.datetime point_in_time: cas ve kterem se ma aktivita pocitat
+    :param [dict] commits: seznam vsech zmen v repozitari
+    :param datetime.date point_in_time: cas ve kterem se ma aktivita pocitat
     :return: mira aktivity dle frekvenci
     :rtype: float
     """
     # ziskam data prvniho a posledniho zaslani zmen do repozitare
-    first_commit = min(commits, key=lambda commit: parse_date(commit['commit']['committer']['date']))
-    last_commit = max(commits, key=lambda commit: parse_date(commit['commit']['committer']['date']))
+    first_commit = min(commits, key=get_commit_date)
+    last_commit = max(commits, key=get_commit_date)
 
     # ziskam informace o casech daneho repozitare
-    time_created = parse_date(first_commit['commit']['committer']['date'])
-    time_ended = parse_date(last_commit['commit']['committer']['date'])
+    time_created = get_commit_date(first_commit)
+    time_ended = get_commit_date(last_commit)
 
     if is_old_enough(time_ended):
         # ziskam casove vzdalenosti
         begin_to_point = point_in_time - time_created
 
         # frekvence od zacatku je jednoduse frekvence commitu za den od prvniho commitu do aktualniho dne
-        f_hist = compute_freq_for_commits(commits, time_created, point_in_time)
-
-        f_future = compute_freq_for_commits(commits, point_in_time + one_day, point_in_time + one_day + begin_to_point)
+        f_hist = compute_freq_func(commits, get_commit_date, time_created, point_in_time)
+        f_future = compute_freq_func(commits, get_commit_date, point_in_time + one_day,
+                                     point_in_time + one_day + begin_to_point)
 
         return f_future / f_hist
     else:
         # pokud se projekt stale vyviji, nemohu pouzit frekvence
-        return -1
-
-
-def compute_delta_freq_activity(commits, point_in_time, future_time_delta):
-    """Vraci miru aktivity spoctenou podle budouci frekvence.
-
-    :param list[dict] commits: seznam vsech zmen v repozitari
-    :param datetime.datetime point_in_time: cas ve kterem se ma aktivita pocitat
-    :param relativedelta future_time_delta: casove rozmezi, pro ktere se ma aktivita pocitat
-    :return: mira aktivita dle budouci frekvence
-    :rtype: float
-    """
-    if is_old_enough(point_in_time, future_time_delta):
-        first_commit = min(commits, key=lambda commit: parse_date(commit['commit']['committer']['date']))
-        time_created = parse_date(first_commit['commit']['committer']['date'])
-
-        start = min(point_in_time, point_in_time + future_time_delta)
-        start = max(start, time_created)
-        end = max(point_in_time, point_in_time + future_time_delta)
-        f = compute_freq_for_commits(commits, start, end)
-        return f
-    else:
         return -1
 
 
@@ -172,55 +150,59 @@ def get_all_commits(gh, login, name):
     :param string login: login vlastnika repozitare
     :param string name: nazev repozitare
     :return: pole vsech commitu, udaje o trvani repozitare
-    :rtype: list[dict], datetime.datetime, datetime.datetime
+    :rtype: [dict], datetime.datetime, datetime.datetime
     """
     commits = download_all(gh.repos(login)(name).commits())
     if len(commits) == 0:
         raise RepoNotValid  # prazdny repozitar je k nicemu
 
     # ziskam data prvniho a posledniho zaslani zmen do repozitare
-    first_commit = min(commits, key=lambda commit: parse_date(commit['commit']['committer']['date']))
-    last_commit = max(commits, key=lambda commit: parse_date(commit['commit']['committer']['date']))
+    first_commit = min(commits, key=get_commit_date)
+    last_commit = max(commits, key=get_commit_date)
 
     # ziskam informace o casech daneho repozitare
-    time_created = parse_date(first_commit['commit']['committer']['date'])
-    time_ended = parse_date(last_commit['commit']['committer']['date'])
+    time_created = get_commit_date(first_commit)
+    time_ended = get_commit_date(last_commit)
 
     return commits, time_created, time_ended
 
 
 def get_all_issues_pulls(gh, login, name):
-    """Vrati slovniky vsech issues a pull requestu zadaneho repozitare a jejich patricne komentare.
+    """Vrati vsechy issues a pull requesty zadaneho repozitare a jejich patricne komentare.
 
     :param github.GitHub gh: instance objektu GitHub
     :param string login: login vlastnika repozitare
     :param string name: nazev repozitare
-    :return: slovniky vsech issues a pull requestu spolu s jejich komentari
-    :rtype: (dict[string,list[dict]], dict[string,list[dict]])
+    :return: issues a pull requesty spolu s jejich komentari
+    :rtype: ([(dict, [dict])], [(dict, [dict])])
     """
     # ziskam seznam vsech issues a pull requestu
     issues_pulls = download_all(gh.repos(login)(name).issues(), state="all", direction="asc")
 
     # roztridim na issues a pull requests
-    issues = {}
-    pulls = {}
+    issues = []
+    pulls = []
     for p in issues_pulls:
         if 'pull_request' in p:
-            pulls[p] = []
+            pulls.append(p)
         else:
-            issues[p] = []
+            issues.append(p)
 
-    for i in issues.keys():
-        issues[i] = download_all(gh.repos(login)(name).issues()(i['number']).comments())
-    for p in pulls.keys():
-        pulls[p] = download_all(gh.repos(login)(name).issues()(p['number']).comments())
-    return issues, pulls
+    issues_comm = []
+    pulls_comm = []
+    for i in issues:
+        comments = download_all(gh.repos(login)(name).issues()(i['number']).comments())
+        issues_comm.append((i, comments))
+    for p in pulls:
+        comments = download_all(gh.repos(login)(name).issues()(p['number']).comments())
+        pulls_comm.append((p, comments))
+    return issues_comm, pulls_comm
 
 
 def get_commits_stats(commits, time_created, point_in_time):
     """Ziska mozne statistiky o commitech k repozitari v zadany cas.
 
-    :param list[dict] commits: pole vsech commitu do repozitare
+    :param [dict] commits: pole vsech commitu do repozitare
     :param datetime.datetime time_created: cas vytvoreni repozitare
     :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
     :return: pole hodnot, ktere se maji pridat k atributum objektu
@@ -228,29 +210,38 @@ def get_commits_stats(commits, time_created, point_in_time):
     """
     values = []
     # ziskam pocet commitu do daneho data
-    commits_before = [c for c in commits if parse_date(c['commit']['committer']['date']) <= point_in_time]
+    commits_before = [c for c in commits if get_commit_date(c) <= point_in_time]
     values.append(str(len(commits_before)))
 
     # ziskam frekvenci commitu za posledni tyden, mesic, pulrok, rok, celkovou dobu
-    values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(weeks=-1))))
-    values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(months=-1))))
-    values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(months=-6))))
-    values.append(str(compute_delta_freq_activity(commits, point_in_time, relativedelta(years=-1))))
-    values.append(str(compute_freq_for_commits(commits, time_created, point_in_time)))
+    values.append(str(compute_delta_freq_func(commits, get_commit_date, point_in_time, relativedelta(weeks=-1))))
+    values.append(str(compute_delta_freq_func(commits, get_commit_date, point_in_time, relativedelta(months=-1))))
+    values.append(str(compute_delta_freq_func(commits, get_commit_date, point_in_time, relativedelta(months=-6))))
+    values.append(str(compute_delta_freq_func(commits, get_commit_date, point_in_time, relativedelta(years=-1))))
+    values.append(str(compute_freq_func(commits, get_commit_date, time_created, point_in_time)))
+
+    # TODO: jeste rozlozeni podle autora
     return values
 
 
-def get_issues_pulls_stats(issues, time_created, point_in_time):
+def get_issues_stats(issues, time_created, point_in_time):
     """Ziska mozne statistiky o issues nebo pull requestech k repozitari v zadany cas.
 
-    :param dict[string,list[dict]] issues: slovnik issues nebo pull requestu
+    :param [(dict, [dict])] issues: slovnik issues nebo pull requestu
     :param datetime.datetime time_created: cas vytvoreni repozitare
     :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
     values = []
-    # TODO
+    issues_before = []
+    comments_dict = {}
+    for issue, comments in issues:
+        if get_issues_date(issue) > point_in_time:
+            continue
+        comments_dict[issue['number']] = [c for c in comments if get_issues_date(c) <= point_in_time]
+        issues_before.append(issue)
+
     return values
 
 
@@ -285,6 +276,8 @@ def get_repo_stats(gh, login, name):
 
     # Informace o issues
     issues, pulls = get_all_issues_pulls(gh, login, name)
+    values.extend(get_issues_stats(issues, time_created, point_in_time))
+    values.extend(get_issues_stats(pulls, time_created, point_in_time))
 
     ## Hodnoty pro predikci:
     # ziskam aktivitu v bode podle frekvenci
@@ -292,13 +285,17 @@ def get_repo_stats(gh, login, name):
     # ziskam aktivitu v bode podle procent
     values.append(str(compute_perc_activity(commits, point_in_time)))
     # ziskam aktivitu podle frekvence v pristim tydnu
-    values.append(str(compute_delta_freq_activity(commits, point_in_time + one_day, relativedelta(weeks=1))))
+    values.append(str(compute_delta_freq_func(commits, get_commit_date, point_in_time + one_day,
+                                              relativedelta(weeks=1))))
     # ziskam aktivitu podle frekvence v pristim mesici
-    values.append(str(compute_delta_freq_activity(commits, point_in_time + one_day, relativedelta(months=1))))
+    values.append(str(compute_delta_freq_func(commits, get_commit_date, point_in_time + one_day,
+                                              relativedelta(months=1))))
     # ziskam aktivitu podle frekvence v pristim pulroce
-    values.append(str(compute_delta_freq_activity(commits, point_in_time + one_day, relativedelta(months=6))))
+    values.append(str(compute_delta_freq_func(commits, get_commit_date, point_in_time + one_day,
+                                              relativedelta(months=6))))
     # ziskam aktivitu podle frekvence v pristim roce
-    values.append(str(compute_delta_freq_activity(commits, point_in_time + one_day, relativedelta(years=1))))
+    values.append(str(compute_delta_freq_func(commits, get_commit_date, point_in_time + one_day,
+                                              relativedelta(years=1))))
 
     return values
 
@@ -315,7 +312,7 @@ def main(sample_count, output):
     remaining = sample_count
     one_part = 100.0 / sample_count
     percentage = 0
-    with open(output, "w") as f:
+    with open(output, "w", 1) as f:
         f.write(", ".join(ATTRS) + "\n")
 
         while remaining > 0:

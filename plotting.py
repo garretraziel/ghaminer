@@ -3,48 +3,39 @@
 import matplotlib.pyplot as plt
 import github
 import ghaminer
-from dateutil.parser import parse as parse_date
 from dateutil.relativedelta import relativedelta
 import datetime
 
 gh = github.GitHub(username="garretraziel", password="Boloomka0951")
 
 print "getting information..."
-page = 1
-commits = []
-while True:
-    print "Page: %d" % page
-    result = gh.repos("sgala")("gajim").commits().get(page=page)
-    #result = gh.repos("garretraziel")("icp").commits().get(page=page)
-    if len(result) > 0:
-        commits.extend(result)
-        page += 1
-    else:
-        break
+commits, first, last = ghaminer.get_all_commits(gh, "garretraziel", "icp")
 
-print "\nsorting commits..."
-commits.sort(key=lambda x: parse_date(x['commit']['committer']['date']))
-times = [parse_date(c['commit']['committer']['date']) for c in commits]
-timespan = (times[-1] - times[0]).days + 1
-first = times[0]
-last = times[-1]
+print "sorting commits..."
+commits.sort(key=ghaminer.get_commit_date)
+times = [ghaminer.get_commit_date(c) for c in commits]
+timespan = (last - first).days + 1
 
 print "getting freq ratio"
 freqs = [ghaminer.compute_commit_freq_activity(commits, (first + datetime.timedelta(days=r))) for r in range(timespan)]
 print "getting percentage"
 percs = [ghaminer.compute_perc_activity(commits, (first + datetime.timedelta(days=r))) for r in range(timespan)]
 print "getting 1w freq"
-freq1w = [ghaminer.compute_delta_freq_activity(commits, (first + datetime.timedelta(days=r)), relativedelta(weeks=1)) for r in range(timespan)]
+freq1w = [ghaminer.compute_delta_freq_func(commits, ghaminer.get_commit_date, (first + datetime.timedelta(days=r)),
+                                           relativedelta(weeks=1)) for r in range(timespan)]
 print "getting 1m freq"
-freq1m = [ghaminer.compute_delta_freq_activity(commits, (first + datetime.timedelta(days=r)), relativedelta(months=1)) for r in range(timespan)]
+freq1m = [ghaminer.compute_delta_freq_func(commits, ghaminer.get_commit_date, (first + datetime.timedelta(days=r)),
+                                           relativedelta(months=1)) for r in range(timespan)]
 print "getting 6m freq"
-freq6m = [ghaminer.compute_delta_freq_activity(commits, (first + datetime.timedelta(days=r)), relativedelta(months=6)) for r in range(timespan)]
+freq6m = [ghaminer.compute_delta_freq_func(commits, ghaminer.get_commit_date, (first + datetime.timedelta(days=r)),
+                                           relativedelta(months=6)) for r in range(timespan)]
 print "getting 1y freq"
-freq1y = [ghaminer.compute_delta_freq_activity(commits, (first + datetime.timedelta(days=r)), relativedelta(years=1)) for r in range(timespan)]
+freq1y = [ghaminer.compute_delta_freq_func(commits, ghaminer.get_commit_date, (first + datetime.timedelta(days=r)),
+                                           relativedelta(years=1)) for r in range(timespan)]
 
-dates = [t.date() for t in times]
-counts = [dates.count(first.date() + datetime.timedelta(days=r)) for r in range(timespan)]
-text_dates = [(first.date() + datetime.timedelta(days=r)).strftime("%d %b") for r in range(timespan)]
+dates = times
+counts = [dates.count(first + datetime.timedelta(days=r)) for r in range(timespan)]
+text_dates = [(first + datetime.timedelta(days=r)).strftime("%d %b") for r in range(timespan)]
 
 print "plotting..."
 plt.subplot(321)
