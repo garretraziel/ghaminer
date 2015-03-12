@@ -12,7 +12,9 @@ import pytz
 
 MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
 ATTRS = ["id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit", "commits_count",
-         "freq_1w", "freq_1m", "freq_6m", "freq_1y", "freq_all",
+         "commits_f_1w", "commits_f_1m", "commits_f_6m", "commits_f_1y", "commits_f_all",
+         "issues_f_1w", "issues_f_1m", "issues_f_6m", "issues_f_1y", "issues_f_all",
+         "pulls_f_1w", "pulls_f_1m", "pulls_f_6m", "pulls_f_1y", "pulls_f_all",
          "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
@@ -88,14 +90,17 @@ def compute_delta_freq_func(values, get_date_func, point_in_time, future_time_de
     :rtype: float
     """
     if is_old_enough(point_in_time, future_time_delta):
-        first_commit = min(values, key=get_date_func)
-        time_created = get_date_func(first_commit)
+        if len(values) == 0:
+            return 0.0
+        else:
+            first_commit = min(values, key=get_date_func)
+            time_created = get_date_func(first_commit)
 
-        start = min(point_in_time, point_in_time + future_time_delta)
-        start = max(start, time_created)
-        end = max(point_in_time, point_in_time + future_time_delta)
-        f = compute_freq_func(values, get_date_func, start, end)
-        return f
+            start = min(point_in_time, point_in_time + future_time_delta)
+            start = max(start, time_created)
+            end = max(point_in_time, point_in_time + future_time_delta)
+            f = compute_freq_func(values, get_date_func, start, end)
+            return f
     else:
         return -1
 
@@ -241,6 +246,13 @@ def get_issues_stats(issues, time_created, point_in_time):
             continue
         comments_dict[issue['number']] = [c for c in comments if get_issues_date(c) <= point_in_time]
         issues_before.append(issue)
+
+    # ziskam frekvenci commitu za posledni tyden, mesic, pulrok, rok, celkovou dobu
+    values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(weeks=-1))))
+    values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(months=-1))))
+    values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(months=-6))))
+    values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(years=-1))))
+    values.append(str(compute_freq_func(issues_before, get_issues_date, time_created, point_in_time)))
 
     return values
 
