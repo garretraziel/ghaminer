@@ -13,8 +13,8 @@ import pytz
 MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
 ATTRS = ["id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit", "commits_count",
          "commits_f_1w", "commits_f_1m", "commits_f_6m", "commits_f_1y", "commits_f_all",
-         "issues_f_1w", "issues_f_1m", "issues_f_6m", "issues_f_1y", "issues_f_all",
-         "pulls_f_1w", "pulls_f_1m", "pulls_f_6m", "pulls_f_1y", "pulls_f_all",
+         "issues_count", "issues_f_1w", "issues_f_1m", "issues_f_6m", "issues_f_1y", "issues_f_all",
+         "pulls_count", "pulls_f_1w", "pulls_f_1m", "pulls_f_6m", "pulls_f_1y", "pulls_f_all",
          "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
@@ -247,7 +247,9 @@ def get_issues_stats(issues, time_created, point_in_time):
         comments_dict[issue['number']] = [c for c in comments if get_issues_date(c) <= point_in_time]
         issues_before.append(issue)
 
-    # ziskam frekvenci commitu za posledni tyden, mesic, pulrok, rok, celkovou dobu
+    values.append(str(len(issues_before)))
+
+    # ziskam frekvenci issues za posledni tyden, mesic, pulrok, rok, celkovou dobu
     values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(weeks=-1))))
     values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(months=-1))))
     values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(months=-6))))
