@@ -162,6 +162,8 @@ def compute_delta_avg_func(values, get_date_func, get_value_func, point_in_time,
     :rtype: float
     """
     if is_old_enough(point_in_time, time_delta):
+        if len(values) == 0:
+            return -1
         first_value = min(values, key=get_date_func)
         time_created = get_date_func(first_value)
 
