@@ -11,17 +11,43 @@ from dateutil.relativedelta import relativedelta
 import pytz
 
 MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
-ATTRS = ["id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit", "commits_count",
-         "commits_f_1w", "commits_f_1m", "commits_f_6m", "commits_f_1y", "commits_f_all",
-         "issues_count", "issues_f_1w", "issues_f_1m", "issues_f_6m", "issues_f_1y", "issues_f_all",
-         "pulls_count", "pulls_f_1w", "pulls_f_1m", "pulls_f_6m", "pulls_f_1y", "pulls_f_all",
-         "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
+ATTRS = [
+    # zakladni informace
+    "id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit",
+
+    ## commits
+    # informace o frekvencich commitu
+    "commits_count", "commits_f_1w", "commits_f_1m", "commits_f_6m", "commits_f_1y", "commits_f_all",
+
+    ## issues
+    # informace o frekvencich issues
+    "issues_count", "issues_f_1w", "issues_f_1m", "issues_f_6m", "issues_f_1y", "issues_f_all",
+    # informace o frekvencich zavrenych issues
+    "closed_issues_count", "closed_issues_f_1w", "closed_issues_f_1m", "closed_issues_f_6m", "closed_issues_f_1y", "closed_issues_f_all",
+    # informace o prumernych casech k zavreni issues
+    "closed_issues_time_1w", "closed_issues_time_1m", "closed_issues_time_6m", "closed_issues_time_1y", "closed_issues_time_all",
+    # informace o frekvencich komentaru
+    "comments_count", "comments_f_1w", "comments_f_1m", "comments_f_6m", "comments_f_1y", "comments_f_all",
+
+    ## pull requests
+    # informace o frekvencich pull requestu
+    "pulls_count", "pulls_f_1w", "pulls_f_1m", "pulls_f_6m", "pulls_f_1y", "pulls_f_all",
+    # informace o frekvencich zavrenych pull requestu
+    "closed_pulls_count", "closed_pulls_f_1w", "closed_pulls_f_1m", "closed_pulls_f_6m", "closed_pulls_f_1y", "closed_pulls_f_all",
+    # informace o prumernych casech k zavreni pull requestu
+    "closed_pulls_time_1w", "closed_pulls_time_1m", "closed_pulls_time_6m", "closed_pulls_time_1y", "closed_pulls_time_all",
+    # informace o frekvencich komentaru k pull requestu
+    "pulls_comments_count", "pulls_comments_f_1w", "pulls_comments_f_1m", "pulls_comments_f_6m", "pulls_comments_f_1y", "pulls_comments_f_all",
+
+    ## hodnoty pro predikci
+    "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
                    "subscribers_count", "updated_at", "pushed_at"]
 one_day = datetime.timedelta(days=1)
 get_commit_date = lambda x: parse_date(x['commit']['committer']['date']).date()
 get_issues_date = lambda x: parse_date(x['created_at']).date()
+get_time_to_close = lambda x: (parse_date(x['closed_at']).date() - parse_date(x['created_at']).date()).days
 
 # tyto prvky budu muset omezit casem:
 # stargazers_count forks_count watchers_count open_issues_count subscribers_count pushed_at
@@ -79,28 +105,71 @@ def compute_freq_func(values, get_date_func, time_from, time_to):
     return f_time
 
 
-def compute_delta_freq_func(values, get_date_func, point_in_time, future_time_delta):
+def compute_delta_freq_func(values, get_date_func, point_in_time, time_delta):
     """Vraci frekvenci udalosti pro zadane casove rozpeti.
 
     :param [dict] values: seznam vsech udalosti
     :param function get_date_func: funkce pro ziskani data z hodnoty
     :param datetime.date point_in_time: cas ve kterem se ma frekvence pocitat
-    :param relativedelta future_time_delta: casove rozmezi, pro ktere se ma frekvence pocitat
+    :param relativedelta time_delta: casove rozmezi, pro ktere se ma frekvence pocitat
     :return: frekvence udalosti v zadanem casovem rozmezi
     :rtype: float
     """
-    if is_old_enough(point_in_time, future_time_delta):
+    if is_old_enough(point_in_time, time_delta):
         if len(values) == 0:
             return 0.0
         else:
-            first_commit = min(values, key=get_date_func)
-            time_created = get_date_func(first_commit)
+            first_value = min(values, key=get_date_func)
+            time_created = get_date_func(first_value)
 
-            start = min(point_in_time, point_in_time + future_time_delta)
+            start = min(point_in_time, point_in_time + time_delta)
             start = max(start, time_created)
-            end = max(point_in_time, point_in_time + future_time_delta)
+            end = max(point_in_time, point_in_time + time_delta)
             f = compute_freq_func(values, get_date_func, start, end)
             return f
+    else:
+        return -1
+
+
+def compute_avg_func(values, get_date_func, get_value_func, time_from, time_to):
+    """Vraci prumer hodnot, ktere lze ziskat danou funkci, za dane casove obdobi.
+
+    :param [dict] values: seznam vsech udalosti
+    :param function get_date_func: funkce, ktera ziska casovy udaj z jedne udalosti
+    :param function get_value_func: funkce, ktera ziska hodnotu udalosti
+    :param datetime.date time_from: cas od ktereho se ma prumer pocitat
+    :param datetime.date time_to: cas do ktereho se ma prumer pocitat
+    :return: prumer hodnot
+    :rtype: float
+    """
+    values_in = [get_value_func(v) for v in values if time_from <= get_date_func(v) <= time_to]
+    if len(values_in) > 0:
+        avg = float(sum(values_in)) / len(values_in)
+    else:
+        avg = -1
+    return avg
+
+
+def compute_delta_avg_func(values, get_date_func, get_value_func, point_in_time, time_delta):
+    """Vraci prumer hodnot pro zadane casove rozpeti.
+
+    :param [dict] values: seznam vsech udalosti
+    :param function get_date_func: funkce, ktera ziska casovy udaj z jedne udalosti
+    :param function get_value_func: funkce, ktera ziska hodnotu udalosti
+    :param datetime.date point_in_time: cas ve kterem se ma prumer pocitat
+    :param relativedelta time_delta: casove rozmezi, pro ktere se ma prumer pocitat
+    :return: prumer hodnot v zadanem casovem rozmezi
+    :rtype: float
+    """
+    if is_old_enough(point_in_time, time_delta):
+        first_value = min(values, key=get_date_func)
+        time_created = get_date_func(first_value)
+
+        start = min(point_in_time, point_in_time + time_delta)
+        start = max(start, time_created)
+        end = max(point_in_time, point_in_time + time_delta)
+        avg = compute_avg_func(values, get_date_func, get_value_func, start, end)
+        return avg
     else:
         return -1
 
@@ -241,20 +310,58 @@ def get_issues_stats(issues, time_created, point_in_time):
     values = []
     issues_before = []
     comments_dict = {}
+    flattened_comments = []
+    closed_issues = []
     for issue, comments in issues:
         if get_issues_date(issue) > point_in_time:
             continue
-        comments_dict[issue['number']] = [c for c in comments if get_issues_date(c) <= point_in_time]
+        comments_for = [c for c in comments if get_issues_date(c) <= point_in_time]
+        comments_dict[issue['number']] = comments_for
+        flattened_comments.extend(comments_for)
         issues_before.append(issue)
 
-    values.append(str(len(issues_before)))
+        if issue['state'] == 'closed':
+            closed_issues.append(issue)
 
     # ziskam frekvenci issues za posledni tyden, mesic, pulrok, rok, celkovou dobu
+    values.append(str(len(issues_before)))
     values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(weeks=-1))))
     values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(months=-1))))
     values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(months=-6))))
     values.append(str(compute_delta_freq_func(issues_before, get_issues_date, point_in_time, relativedelta(years=-1))))
     values.append(str(compute_freq_func(issues_before, get_issues_date, time_created, point_in_time)))
+
+    # informace o zavrenych issues
+    values.append(str(len(closed_issues)))
+
+    values.append(str(compute_delta_freq_func(closed_issues, get_issues_date, point_in_time, relativedelta(weeks=-1))))
+    values.append(str(compute_delta_freq_func(closed_issues, get_issues_date, point_in_time, relativedelta(months=-1))))
+    values.append(str(compute_delta_freq_func(closed_issues, get_issues_date, point_in_time, relativedelta(months=-6))))
+    values.append(str(compute_delta_freq_func(closed_issues, get_issues_date, point_in_time, relativedelta(years=-1))))
+    values.append(str(compute_freq_func(closed_issues, get_issues_date, time_created, point_in_time)))
+
+    # cas, jak dlouho trvalo zavrit issue
+    values.append(str(compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, point_in_time,
+                                             relativedelta(weeks=-1))))
+    values.append(str(compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, point_in_time,
+                                             relativedelta(months=-1))))
+    values.append(str(compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, point_in_time,
+                                             relativedelta(months=-6))))
+    values.append(str(compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, point_in_time,
+                                             relativedelta(years=-1))))
+    values.append(str(compute_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time)))
+
+    # ziskam frekvenci komentaru za posledni tyden, mesic, pulrok, rok, celkovou dobu
+    values.append(str(len(flattened_comments)))
+    values.append(
+        str(compute_delta_freq_func(flattened_comments, get_issues_date, point_in_time, relativedelta(weeks=-1))))
+    values.append(
+        str(compute_delta_freq_func(flattened_comments, get_issues_date, point_in_time, relativedelta(months=-1))))
+    values.append(
+        str(compute_delta_freq_func(flattened_comments, get_issues_date, point_in_time, relativedelta(months=-6))))
+    values.append(
+        str(compute_delta_freq_func(flattened_comments, get_issues_date, point_in_time, relativedelta(years=-1))))
+    values.append(str(compute_freq_func(flattened_comments, get_issues_date, time_created, point_in_time)))
 
     return values
 
