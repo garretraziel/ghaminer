@@ -23,9 +23,11 @@ ATTRS = [
     # informace o frekvencich issues
     "issues_count", "issues_f_1w", "issues_f_1m", "issues_f_6m", "issues_f_1y", "issues_f_all",
     # informace o frekvencich zavrenych issues
-    "closed_issues_count", "closed_issues_f_1w", "closed_issues_f_1m", "closed_issues_f_6m", "closed_issues_f_1y", "closed_issues_f_all",
+    "closed_issues_count", "closed_issues_f_1w", "closed_issues_f_1m", "closed_issues_f_6m", "closed_issues_f_1y",
+    "closed_issues_f_all",
     # informace o prumernych casech k zavreni issues
-    "closed_issues_time_1w", "closed_issues_time_1m", "closed_issues_time_6m", "closed_issues_time_1y", "closed_issues_time_all",
+    "closed_issues_time_1w", "closed_issues_time_1m", "closed_issues_time_6m", "closed_issues_time_1y",
+    "closed_issues_time_all",
     # informace o frekvencich komentaru
     "comments_count", "comments_f_1w", "comments_f_1m", "comments_f_6m", "comments_f_1y", "comments_f_all",
 
@@ -33,11 +35,22 @@ ATTRS = [
     # informace o frekvencich pull requestu
     "pulls_count", "pulls_f_1w", "pulls_f_1m", "pulls_f_6m", "pulls_f_1y", "pulls_f_all",
     # informace o frekvencich zavrenych pull requestu
-    "closed_pulls_count", "closed_pulls_f_1w", "closed_pulls_f_1m", "closed_pulls_f_6m", "closed_pulls_f_1y", "closed_pulls_f_all",
+    "closed_pulls_count", "closed_pulls_f_1w", "closed_pulls_f_1m", "closed_pulls_f_6m", "closed_pulls_f_1y",
+    "closed_pulls_f_all",
     # informace o prumernych casech k zavreni pull requestu
-    "closed_pulls_time_1w", "closed_pulls_time_1m", "closed_pulls_time_6m", "closed_pulls_time_1y", "closed_pulls_time_all",
+    "closed_pulls_time_1w", "closed_pulls_time_1m", "closed_pulls_time_6m", "closed_pulls_time_1y",
+    "closed_pulls_time_all",
     # informace o frekvencich komentaru k pull requestu
-    "pulls_comments_count", "pulls_comments_f_1w", "pulls_comments_f_1m", "pulls_comments_f_6m", "pulls_comments_f_1y", "pulls_comments_f_all",
+    "pulls_comments_count", "pulls_comments_f_1w", "pulls_comments_f_1m", "pulls_comments_f_6m", "pulls_comments_f_1y",
+    "pulls_comments_f_all",
+
+    ## events
+    # informace o frekvencich vsech udalosti
+    "events_count", "events_f_1w", "events_f_1m", "events_f_6m", "events_f_1y", "events_f_all",
+
+    ## contributors
+    # informace o lidech, co nekdy zaslali commit
+    "contributors_count",
 
     ## hodnoty pro predikci
     "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
@@ -368,6 +381,72 @@ def get_issues_stats(issues, time_created, point_in_time):
     return values
 
 
+def get_all_events(gh, login, name):
+    """Ziska seznam uplne vsech udalosti zadaneho repozitare.
+
+    :param github.GitHub gh: instance objektu GitHub
+    :param string login: login vlastnika repozitare
+    :param string name: nazev repozitare
+    :return: seznam vsech udalosti repozitare
+    :rtype: list
+    """
+    events = download_all(gh.repos(login)(name).events())
+    return events
+
+
+def get_events_stats(events, time_created, point_in_time):
+    """Ziska informace o udalostech v zadany cas.
+
+    :param [dict] events: pole vsech udalosti repozitare
+    :param datetime.datetime time_created: cas vytvoreni repozitare
+    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :return: pole hodnot, ktere se maji pridat k atributum objektu
+    :rtype: list
+    """
+    values = [str(len(events)),
+              str(compute_delta_freq_func(events, get_issues_date, point_in_time, relativedelta(weeks=-1))),
+              str(compute_delta_freq_func(events, get_issues_date, point_in_time, relativedelta(months=-1))),
+              str(compute_delta_freq_func(events, get_issues_date, point_in_time, relativedelta(months=-6))),
+              str(compute_delta_freq_func(events, get_issues_date, point_in_time, relativedelta(years=-1))),
+              str(compute_freq_func(events, get_issues_date, time_created, point_in_time))]
+    return values
+
+
+def get_all_contributors(gh, login, name):
+    """Ziska seznam vsech lidi, co kdy zaslali zmenu do repozitare.
+
+    :param github.GitHub gh: instance objektu GitHub
+    :param string login: login vlastnika repozitare
+    :param string name: nazev repozitare
+    :return: seznam vsech autoru commitu
+    :rtype: [dict]
+    """
+    contributors = download_all(gh.repos(login)(name).contributors())
+    return contributors
+
+
+def get_contributors_stats(contributors, commits, time_created, point_in_time):
+    """Ziska informace o aktivite autoru commitu v zadany cas.
+
+    :param [dict] contributors: pole vsech autoru commitu
+    :param [dict] commits: pole vsech commitu
+    :param datetime.datetime time_created: cas vytvoreni repozitare
+    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :return: pole hodnot, ktere se maji pridat k atributum objektu
+    :rtype: list
+    """
+    values = []
+    values.append(str(len(contributors)))
+
+    # TODO: jaky je rozlozeni (jeden clovek udela vetsinu vs vic lidi dela na tom)
+    # jaky je rozlozeni za posledni tyden, mesic, pulrok, rok, celou dobu
+    # jaka je aktivita nejaktivnejsich contributoru
+
+    # TODO: pridelat assignees
+
+    return values
+
+
 def get_repo_stats(gh, login, name):
     """Ziska veskere statistiky k zadanemu repozitari.
 
@@ -401,6 +480,14 @@ def get_repo_stats(gh, login, name):
     issues, pulls = get_all_issues_pulls(gh, login, name)
     values.extend(get_issues_stats(issues, time_created, point_in_time))
     values.extend(get_issues_stats(pulls, time_created, point_in_time))
+
+    # Informace o udalostech
+    events = get_all_events(gh, login, name)
+    values.extend(get_events_stats(events, time_created, point_in_time))
+
+    # Informace o contributors
+    contributors = get_all_contributors(gh, login, name)
+    values.extend(get_contributors_stats(contributors, commits, time_created, point_in_time))
 
     ## Hodnoty pro predikci:
     # ziskam aktivitu v bode podle frekvenci
@@ -455,21 +542,15 @@ def main(sample_count, output):
                 f.write(", ".join(stats) + "\n")
 
                 # dale:
-                # repository events https://developer.github.com/v3/activity/events/#list-repository-events
-                # repository issue events https://developer.github.com/v3/activity/events/#list-issue-events-for-a-repository
                 # contributors statistics https://developer.github.com/v3/repos/statistics/#contributors
                 # last year commit activity https://developer.github.com/v3/repos/statistics/#commit-activity
                 # code frequency https://developer.github.com/v3/repos/statistics/#code-frequency
                 # participation https://developer.github.com/v3/repos/statistics/#participation
                 # punch card https://developer.github.com/v3/repos/statistics/#punch-card
                 # contributors https://developer.github.com/v3/repos/#list-contributors and https://developer.github.com/v3/activity/events/#list-events-performed-by-a-user
-                # git data?
-                # issues for repository https://developer.github.com/v3/issues/#list-issues-for-a-repository
                 # pozor na pull request
                 # assignees? https://developer.github.com/v3/issues/assignees/
                 # organizations bude asi jeste trochu problem
-                # pull request https://developer.github.com/v3/pulls/ bude mozna dost spojenej s issues?
-                # collaborators a jejich aktivita https://developer.github.com/v3/repos/collaborators/#list
                 # commit comments collaboratoru? tohle prozkoumat jeste https://developer.github.com/v3/repos/comments/#list-commit-comments-for-a-repository
 
                 percentage += one_part
