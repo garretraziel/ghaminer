@@ -8,18 +8,19 @@ import datetime
 import github
 from dateutil.parser import parse as parse_date
 from dateutil.relativedelta import relativedelta
-import pytz
+
+import ghamath as gm
 
 MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
 ATTRS = [
     # zakladni informace
     "id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit",
 
-    ## commits
+    # commits
     # informace o frekvencich commitu
     "commits_count", "commits_f_1w", "commits_f_1m", "commits_f_6m", "commits_f_1y", "commits_f_all",
 
-    ## issues
+    # issues
     # informace o frekvencich issues
     "issues_count", "issues_f_1w", "issues_f_1m", "issues_f_6m", "issues_f_1y", "issues_f_all",
     # informace o frekvencich zavrenych issues
@@ -31,7 +32,7 @@ ATTRS = [
     # informace o frekvencich komentaru
     "comments_count", "comments_f_1w", "comments_f_1m", "comments_f_6m", "comments_f_1y", "comments_f_all",
 
-    ## pull requests
+    # pull requests
     # informace o frekvencich pull requestu
     "pulls_count", "pulls_f_1w", "pulls_f_1m", "pulls_f_6m", "pulls_f_1y", "pulls_f_all",
     # informace o frekvencich zavrenych pull requestu
@@ -44,15 +45,17 @@ ATTRS = [
     "pulls_comments_count", "pulls_comments_f_1w", "pulls_comments_f_1m", "pulls_comments_f_6m", "pulls_comments_f_1y",
     "pulls_comments_f_all",
 
-    ## events
+    # events
     # informace o frekvencich vsech udalosti
     "events_count", "events_f_1w", "events_f_1m", "events_f_6m", "events_f_1y", "events_f_all",
 
-    ## contributors
+    # contributors
     # informace o lidech, co nekdy zaslali commit
-    "contributors_count",
+    "contrib_count", "contrib_p25_1w", "contrib_p50_1w", "contrib_p75_1w",
+    "contrib_p25_1m", "contrib_p50_1m", "contrib_p75_1m", "contrib_p25_6m", "contrib_p50_6m", "contrib_p75_6m",
+    "contrib_p25_1y", "contrib_p50_1y", "contrib_p75_1y", "contrib_p25_all", "contrib_p50_all", "contrib_p75_all",
 
-    ## hodnoty pro predikci
+    # hodnoty pro predikci
     "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
@@ -88,98 +91,6 @@ def download_all(download_obj, **kwargs):
     return values
 
 
-def is_old_enough(date, timespan=relativedelta(months=6), now=pytz.UTC.localize(datetime.datetime.now())):
-    """Vraci, zda je repozitar dostatecne stary na to, aby mohl byt pouzit.
-
-    :param datetime.date date: datum posledniho zaslani zmeny do repozitare
-    :param relativedelta timespan: jak moc stary ma repozitar byt
-    :return: informaci, zda je repozitar dostatecne stary
-    :rtype: bool
-    """
-    # TODO: tohle musim obhajit. proc pulrok?
-    # az ziskam nejaka data, musim vyzkouset, ze pulrok doopravdy staci
-    return (date + timespan) < now.date()
-
-
-def compute_freq_func(values, get_date_func, time_from, time_to):
-    """Vraci frekvence udalosti, ktere muze ziskat dle zadane funkce
-
-    :param [dict] values: seznam vsech udalosti
-    :param function get_date_func: funkce, ktera ziska casovy udaj z jedne udalosti
-    :param datetime.date time_from: cas od ktereho se ma frekvence pocitat
-    :param datetime.date time_to: cas do ktereho se ma frekvence pocitat
-    :return: frekvenci udalosti v repozitari v zadanem casovem rozpeti
-    :rtype: float
-    """
-    # ziskam seznam udalosti v danem casovem rozmezi
-    values_in = [v for v in values if time_from <= get_date_func(v) <= time_to]
-    f_time = float(len(values_in)) / ((time_to - time_from).days + 1)
-
-    return f_time
-
-
-def compute_delta_freq_func(values, get_date_func, time_created, point_in_time, time_delta):
-    """Vraci frekvenci udalosti pro zadane casove rozpeti.
-
-    :param [dict] values: seznam vsech udalosti
-    :param function get_date_func: funkce pro ziskani data z hodnoty
-    :param datetime.date time_created: cas ve kterem byl repozitar vytvoren
-    :param datetime.date point_in_time: cas ve kterem se ma frekvence pocitat
-    :param relativedelta time_delta: casove rozmezi, pro ktere se ma frekvence pocitat
-    :return: frekvence udalosti v zadanem casovem rozmezi
-    :rtype: float
-    """
-    if is_old_enough(point_in_time, time_delta):
-        start = min(point_in_time, point_in_time + time_delta)
-        start = max(start, time_created)
-        end = max(point_in_time, point_in_time + time_delta)
-        f = compute_freq_func(values, get_date_func, start, end)
-        return f
-    else:
-        return -1
-
-
-def compute_avg_func(values, get_date_func, get_value_func, time_from, time_to):
-    """Vraci prumer hodnot, ktere lze ziskat danou funkci, za dane casove obdobi.
-
-    :param [dict] values: seznam vsech udalosti
-    :param function get_date_func: funkce, ktera ziska casovy udaj z jedne udalosti
-    :param function get_value_func: funkce, ktera ziska hodnotu udalosti
-    :param datetime.date time_from: cas od ktereho se ma prumer pocitat
-    :param datetime.date time_to: cas do ktereho se ma prumer pocitat
-    :return: prumer hodnot
-    :rtype: float
-    """
-    values_in = [get_value_func(v) for v in values if time_from <= get_date_func(v) <= time_to]
-    if len(values_in) > 0:
-        avg = float(sum(values_in)) / len(values_in)
-    else:
-        avg = -1
-    return avg
-
-
-def compute_delta_avg_func(values, get_date_func, get_value_func, time_created, point_in_time, time_delta):
-    """Vraci prumer hodnot pro zadane casove rozpeti.
-
-    :param [dict] values: seznam vsech udalosti
-    :param function get_date_func: funkce, ktera ziska casovy udaj z jedne udalosti
-    :param function get_value_func: funkce, ktera ziska hodnotu udalosti
-    :param datetime.datee time_created: cas ve kterem byl repozitar vytvoren
-    :param datetime.date point_in_time: cas ve kterem se ma prumer pocitat
-    :param relativedelta time_delta: casove rozmezi, pro ktere se ma prumer pocitat
-    :return: prumer hodnot v zadanem casovem rozmezi
-    :rtype: float
-    """
-    if is_old_enough(point_in_time, time_delta):
-        start = min(point_in_time, point_in_time + time_delta)
-        start = max(start, time_created)
-        end = max(point_in_time, point_in_time + time_delta)
-        avg = compute_avg_func(values, get_date_func, get_value_func, start, end)
-        return avg
-    else:
-        return -1
-
-
 def compute_perc_activity(commits, point_in_time):
     """Vraci procento projektu, ktere v zadanem case jeste zbyva.
 
@@ -208,14 +119,14 @@ def compute_commit_freq_activity(commits, point_in_time):
     time_created = get_commit_date(first_commit)
     time_ended = get_commit_date(last_commit)
 
-    if is_old_enough(time_ended):
+    if gm.is_old_enough(time_ended):
         # ziskam casove vzdalenosti
         begin_to_point = point_in_time - time_created
 
         # frekvence od zacatku je jednoduse frekvence commitu za den od prvniho commitu do aktualniho dne
-        f_hist = compute_freq_func(commits, get_commit_date, time_created, point_in_time)
-        f_future = compute_freq_func(commits, get_commit_date, point_in_time + one_day,
-                                     point_in_time + one_day + begin_to_point)
+        f_hist = gm.compute_freq_func(commits, get_commit_date, time_created, point_in_time)
+        f_future = gm.compute_freq_func(commits, get_commit_date, point_in_time + one_day,
+                                        point_in_time + one_day + begin_to_point)
 
         return f_future / f_hist
     else:
@@ -295,14 +206,16 @@ def get_commits_stats(commits, time_created, point_in_time):
 
     # ziskam frekvenci commitu za posledni tyden, mesic, pulrok, rok, celkovou dobu
     values.append(
-        str(compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time, relativedelta(weeks=-1))))
+        str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time, relativedelta(weeks=-1))))
     values.append(
-        str(compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time, relativedelta(months=-1))))
+        str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time,
+                                       relativedelta(months=-1))))
     values.append(
-        str(compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time, relativedelta(months=-6))))
+        str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time,
+                                       relativedelta(months=-6))))
     values.append(
-        str(compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time, relativedelta(years=-1))))
-    values.append(str(compute_freq_func(commits, get_commit_date, time_created, point_in_time)))
+        str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time, relativedelta(years=-1))))
+    values.append(str(gm.compute_freq_func(commits, get_commit_date, time_created, point_in_time)))
 
     # TODO: jeste rozlozeni podle autora
     return values
@@ -336,58 +249,67 @@ def get_issues_stats(issues, time_created, point_in_time):
     # ziskam frekvenci issues za posledni tyden, mesic, pulrok, rok, celkovou dobu
     values.append(str(len(issues_before)))
     values.append(str(
-        compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time, relativedelta(weeks=-1))))
+        gm.compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time,
+                                   relativedelta(weeks=-1))))
     values.append(str(
-        compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time, relativedelta(months=-1))))
+        gm.compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time,
+                                   relativedelta(months=-1))))
     values.append(str(
-        compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time, relativedelta(months=-6))))
+        gm.compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time,
+                                   relativedelta(months=-6))))
     values.append(str(
-        compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time, relativedelta(years=-1))))
-    values.append(str(compute_freq_func(issues_before, get_issues_date, time_created, point_in_time)))
+        gm.compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time,
+                                   relativedelta(years=-1))))
+    values.append(str(gm.compute_freq_func(issues_before, get_issues_date, time_created, point_in_time)))
 
     # informace o zavrenych issues
     values.append(str(len(closed_issues)))
 
     values.append(str(
-        compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time, relativedelta(weeks=-1))))
+        gm.compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time,
+                                   relativedelta(weeks=-1))))
     values.append(str(
-        compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time, relativedelta(months=-1))))
+        gm.compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time,
+                                   relativedelta(months=-1))))
     values.append(str(
-        compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time, relativedelta(months=-6))))
+        gm.compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time,
+                                   relativedelta(months=-6))))
     values.append(str(
-        compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time, relativedelta(years=-1))))
-    values.append(str(compute_freq_func(closed_issues, get_issues_date, time_created, point_in_time)))
+        gm.compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time,
+                                   relativedelta(years=-1))))
+    values.append(str(gm.compute_freq_func(closed_issues, get_issues_date, time_created, point_in_time)))
 
     # cas, jak dlouho trvalo zavrit issue
     values.append(
-        str(compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
-                                   relativedelta(weeks=-1))))
+        str(gm.compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
+                                      relativedelta(weeks=-1))))
     values.append(
-        str(compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
-                                   relativedelta(months=-1))))
+        str(gm.compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
+                                      relativedelta(months=-1))))
     values.append(
-        str(compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
-                                   relativedelta(months=-6))))
+        str(gm.compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
+                                      relativedelta(months=-6))))
     values.append(
-        str(compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
-                                   relativedelta(years=-1))))
-    values.append(str(compute_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time)))
+        str(gm.compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
+                                      relativedelta(years=-1))))
+    values.append(
+        str(gm.compute_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time)))
 
     # ziskam frekvenci komentaru za posledni tyden, mesic, pulrok, rok, celkovou dobu
     values.append(str(len(flattened_comments)))
     values.append(
-        str(compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
-                                    relativedelta(weeks=-1))))
+        str(gm.compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
+                                       relativedelta(weeks=-1))))
     values.append(
-        str(compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
-                                    relativedelta(months=-1))))
+        str(gm.compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
+                                       relativedelta(months=-1))))
     values.append(
-        str(compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
-                                    relativedelta(months=-6))))
+        str(gm.compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
+                                       relativedelta(months=-6))))
     values.append(
-        str(compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
-                                    relativedelta(years=-1))))
-    values.append(str(compute_freq_func(flattened_comments, get_issues_date, time_created, point_in_time)))
+        str(gm.compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
+                                       relativedelta(years=-1))))
+    values.append(str(gm.compute_freq_func(flattened_comments, get_issues_date, time_created, point_in_time)))
 
     return values
 
@@ -416,35 +338,21 @@ def get_events_stats(events, time_created, point_in_time):
     """
     events_before = [e for e in events if get_issues_date(e) <= point_in_time]
     values = [str(len(events)),
-              str(compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
-                                          relativedelta(weeks=-1))),
-              str(compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
-                                          relativedelta(months=-1))),
-              str(compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
-                                          relativedelta(months=-6))),
-              str(compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
-                                          relativedelta(years=-1))),
-              str(compute_freq_func(events_before, get_issues_date, time_created, point_in_time))]
+              str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(weeks=-1))),
+              str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(months=-1))),
+              str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(months=-6))),
+              str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(years=-1))),
+              str(gm.compute_freq_func(events_before, get_issues_date, time_created, point_in_time))]
     return values
 
 
-def get_all_contributors(gh, login, name):
-    """Ziska seznam vsech lidi, co kdy zaslali zmenu do repozitare.
-
-    :param github.GitHub gh: instance objektu GitHub
-    :param string login: login vlastnika repozitare
-    :param string name: nazev repozitare
-    :return: seznam vsech autoru commitu
-    :rtype: [dict]
-    """
-    contributors = download_all(gh.repos(login)(name).contributors())
-    return contributors
-
-
-def get_contributors_stats(contributors, commits, time_created, point_in_time):
+def get_contributors_stats(commits, time_created, point_in_time):
     """Ziska informace o aktivite autoru commitu v zadany cas.
 
-    :param [dict] contributors: pole vsech autoru commitu
     :param [dict] commits: pole vsech commitu
     :param datetime.datetime time_created: cas vytvoreni repozitare
     :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
@@ -452,13 +360,60 @@ def get_contributors_stats(contributors, commits, time_created, point_in_time):
     :rtype: list
     """
     values = []
-    values.append(str(len(contributors)))
+    contrib_times = {}
 
     # TODO: jaky je rozlozeni (jeden clovek udela vetsinu vs vic lidi dela na tom)
     # jaky je rozlozeni za posledni tyden, mesic, pulrok, rok, celou dobu
     # jaka je aktivita nejaktivnejsich contributoru
 
-    # TODO: pridelat assignees
+    for c in commits:
+        if c['author'] is None:
+            continue
+        commit_date = get_commit_date(c)
+        if point_in_time < commit_date:
+            continue
+        author = c['author']['login']
+        if author in contrib_times:
+            contrib_times[author].append(commit_date)
+        else:
+            contrib_times[author] = [commit_date]
+
+    values.append(len(contrib_times))
+
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, relativedelta(weeks=-1))))
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 50, time_created, point_in_time, relativedelta(weeks=-1))))
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 75, time_created, point_in_time, relativedelta(weeks=-1))))
+
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, relativedelta(months=-1))))
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 50, time_created, point_in_time, relativedelta(months=-1))))
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 75, time_created, point_in_time, relativedelta(months=-1))))
+
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, relativedelta(months=-6))))
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 50, time_created, point_in_time, relativedelta(months=-6))))
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 75, time_created, point_in_time, relativedelta(months=-6))))
+
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, relativedelta(years=-1))))
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 50, time_created, point_in_time, relativedelta(years=-1))))
+    values.append(
+        str(gm.compute_delta_contrib_count(contrib_times, 75, time_created, point_in_time, relativedelta(years=-1))))
+
+    values.append(
+        str(gm.compute_contrib_count(contrib_times, 25, time_created, point_in_time)))
+    values.append(
+        str(gm.compute_contrib_count(contrib_times, 50, time_created, point_in_time)))
+    values.append(
+        str(gm.compute_contrib_count(contrib_times, 75, time_created, point_in_time)))
 
     return values
 
@@ -502,26 +457,25 @@ def get_repo_stats(gh, login, name):
     values.extend(get_events_stats(events, time_created, point_in_time))
 
     # Informace o contributors
-    contributors = get_all_contributors(gh, login, name)
-    values.extend(get_contributors_stats(contributors, commits, time_created, point_in_time))
+    values.extend(get_contributors_stats(commits, time_created, point_in_time))
 
-    ## Hodnoty pro predikci:
+    # Hodnoty pro predikci:
     # ziskam aktivitu v bode podle frekvenci
     values.append(str(compute_commit_freq_activity(commits, point_in_time)))
     # ziskam aktivitu v bode podle procent
     values.append(str(compute_perc_activity(commits, point_in_time)))
     # ziskam aktivitu podle frekvence v pristim tydnu
-    values.append(str(compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
-                                              relativedelta(weeks=1))))
+    values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
+                                                 relativedelta(weeks=1))))
     # ziskam aktivitu podle frekvence v pristim mesici
-    values.append(str(compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
-                                              relativedelta(months=1))))
+    values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
+                                                 relativedelta(months=1))))
     # ziskam aktivitu podle frekvence v pristim pulroce
-    values.append(str(compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
-                                              relativedelta(months=6))))
+    values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
+                                                 relativedelta(months=6))))
     # ziskam aktivitu podle frekvence v pristim roce
-    values.append(str(compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
-                                              relativedelta(years=1))))
+    values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
+                                                 relativedelta(years=1))))
 
     return values
 
@@ -558,15 +512,11 @@ def main(sample_count, output):
                 f.write(", ".join(stats) + "\n")
 
                 # dale:
-                # contributors statistics https://developer.github.com/v3/repos/statistics/#contributors
-                # last year commit activity https://developer.github.com/v3/repos/statistics/#commit-activity
-                # code frequency https://developer.github.com/v3/repos/statistics/#code-frequency
                 # participation https://developer.github.com/v3/repos/statistics/#participation
-                # punch card https://developer.github.com/v3/repos/statistics/#punch-card
+                #
                 # contributors https://developer.github.com/v3/repos/#list-contributors and https://developer.github.com/v3/activity/events/#list-events-performed-by-a-user
                 # pozor na pull request
-                # assignees? https://developer.github.com/v3/issues/assignees/
-                # organizations bude asi jeste trochu problem
+                # organizations bude asi jeste trochu problem?
                 # commit comments collaboratoru? tohle prozkoumat jeste https://developer.github.com/v3/repos/comments/#list-commit-comments-for-a-repository
 
                 percentage += one_part
