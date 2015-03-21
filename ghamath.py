@@ -15,8 +15,6 @@ def is_old_enough(date, timespan=relativedelta(months=6), now=pytz.UTC.localize(
     :return: informaci, zda je repozitar dostatecne stary
     :rtype: bool
     """
-    # TODO: tohle musim obhajit. proc pulrok?
-    # az ziskam nejaka data, musim vyzkouset, ze pulrok doopravdy staci
     return (date + timespan) < now.date()
 
 
@@ -103,11 +101,11 @@ def compute_delta_avg_func(values, get_date_func, get_value_func, time_created, 
 def compute_contrib_count(contribs, percent, time_from, time_to):
     """Vraci kolika z nejaktivnejsich lidi bylo zaslano alespon "percent" zmen za dane casove obdobi.
 
-    :param dict contribs:
-    :param int percent:
-    :param datetime.date time_from:
-    :param datetime.date time_to:
-    :return:
+    :param dict contribs: slovnik autor commitu: commity
+    :param int percent: kolik procent museli udelat
+    :param datetime.date time_from: cas od ktereho se pocet pocita
+    :param datetime.date time_to: cas do ktereho se pocet pocita
+    :return: pocet lidi, kteri spolu udelali aspon "percent" zmen
     :rtype: int
     """
     counts = []
@@ -144,3 +142,49 @@ def compute_delta_contrib_count(contribs, percent, time_created, point_in_time, 
         return count
     else:
         return -1
+
+
+def compute_contrib(contribs, percent, time_from, time_to):
+    """Vraci nejaktivnejsi lidi, kteri zaslani alespon "percent" zmen za dane casove obdobi.
+
+    :param dict contribs: slovnik autor commitu: commity
+    :param int percent: kolik procent museli udelat
+    :param datetime.date time_from: cas od ktereho se pocet pocita
+    :param datetime.date time_to: cas do ktereho se pocet pocita
+    :return: seznam lidi, kteri spolu udelali aspon "percent" zmen
+    :rtype: [string]
+    """
+    counts = []
+    s = 0
+    for c in contribs:
+        l = len([v for v in contribs[c] if time_from <= v <= time_to])
+        counts.append((c, l))
+        s += l
+    counts.sort(key=lambda x: x[1], reverse=True)
+
+    i = 1
+    rat = percent/100.0
+    while sum([x[1] for x in counts[:i]]) < rat*s:
+        i += 1
+    return [x[0] for x in counts[:i]]
+
+
+def compute_delta_contrib(contribs, percent, time_created, point_in_time, time_delta):
+    """Vraci nejaktivnejsi lidi, kteri zaslani alespon "percent" zmen za dane casove rozpeti.
+
+    :param dict contribs: slovnik autor commitu: commity
+    :param int percent: kolik procent museli udelat
+    :param datetime.date time_created: cas kdy byl repozitar vytvoren
+    :param datetime.date point_in_time: cas pro ktery se pocita
+    :param relativedelta time_delta: casove rozpeti od point_in_time
+    :return: seznam lidi, kteri spolu udelali aspon "percent" zmen
+    :rtype: [string]
+    """
+    if is_old_enough(point_in_time, time_delta):
+        start = min(point_in_time, point_in_time + time_delta)
+        start = max(start, time_created)
+        end = max(point_in_time, point_in_time + time_delta)
+        contrib = compute_contrib(contribs, percent, start, end)
+        return contrib
+    else:
+        return []

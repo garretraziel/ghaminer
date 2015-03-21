@@ -66,7 +66,7 @@ get_issues_date = lambda x: parse_date(x['created_at']).date()
 get_time_to_close = lambda x: (parse_date(x['closed_at']).date() - parse_date(x['created_at']).date()).days
 
 # tyto prvky budu muset omezit casem:
-# stargazers_count forks_count watchers_count open_issues_count subscribers_count pushed_at
+# stargazers_count forks_count watchers_count subscribers_count
 
 
 class RepoNotValid(Exception):
@@ -362,10 +362,7 @@ def get_contributors_stats(commits, time_created, point_in_time):
     values = []
     contrib_times = {}
 
-    # TODO: jaky je rozlozeni (jeden clovek udela vetsinu vs vic lidi dela na tom)
-    # jaky je rozlozeni za posledni tyden, mesic, pulrok, rok, celou dobu
-    # jaka je aktivita nejaktivnejsich contributoru
-
+    # ziskam slovnik {autor: seznam dat commitu}
     for c in commits:
         if c['author'] is None:
             continue
@@ -380,40 +377,22 @@ def get_contributors_stats(commits, time_created, point_in_time):
 
     values.append(len(contrib_times))
 
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, relativedelta(weeks=-1))))
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 50, time_created, point_in_time, relativedelta(weeks=-1))))
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 75, time_created, point_in_time, relativedelta(weeks=-1))))
+    for td in [relativedelta(weeks=-1), relativedelta(months=-1), relativedelta(months=-6), relativedelta(years=-1)]:
+        values.append(str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, td)))
+        values.append(str(gm.compute_delta_contrib_count(contrib_times, 50, time_created, point_in_time, td)))
+        values.append(str(gm.compute_delta_contrib_count(contrib_times, 75, time_created, point_in_time, td)))
 
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, relativedelta(months=-1))))
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 50, time_created, point_in_time, relativedelta(months=-1))))
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 75, time_created, point_in_time, relativedelta(months=-1))))
+    values.append(str(gm.compute_contrib_count(contrib_times, 25, time_created, point_in_time)))
+    values.append(str(gm.compute_contrib_count(contrib_times, 50, time_created, point_in_time)))
+    values.append(str(gm.compute_contrib_count(contrib_times, 75, time_created, point_in_time)))
 
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, relativedelta(months=-6))))
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 50, time_created, point_in_time, relativedelta(months=-6))))
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 75, time_created, point_in_time, relativedelta(months=-6))))
+    for td in [relativedelta(weeks=-1), relativedelta(months=-1), relativedelta(months=-6), relativedelta(years=-1)]:
+        # ziskam X nejaktivnejsich lidi, kteri dohromady zaslali aspon 75 % zmen
 
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, relativedelta(years=-1))))
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 50, time_created, point_in_time, relativedelta(years=-1))))
-    values.append(
-        str(gm.compute_delta_contrib_count(contrib_times, 75, time_created, point_in_time, relativedelta(years=-1))))
-
-    values.append(
-        str(gm.compute_contrib_count(contrib_times, 25, time_created, point_in_time)))
-    values.append(
-        str(gm.compute_contrib_count(contrib_times, 50, time_created, point_in_time)))
-    values.append(
-        str(gm.compute_contrib_count(contrib_times, 75, time_created, point_in_time)))
+        # dle https://developer.github.com/v3/activity/events/ je zahrnuto max 300 udalosti za max poslednich 90 dni
+        most_active = gm.compute_delta_contrib(contrib_times, 75, time_created, point_in_time, td)
+        print most_active
+        # TODO: ziskat jejich aktivity, frekvenci, prumerovat
 
     return values
 
@@ -515,7 +494,6 @@ def main(sample_count, output):
                 # participation https://developer.github.com/v3/repos/statistics/#participation
                 #
                 # contributors https://developer.github.com/v3/repos/#list-contributors and https://developer.github.com/v3/activity/events/#list-events-performed-by-a-user
-                # pozor na pull request
                 # organizations bude asi jeste trochu problem?
                 # commit comments collaboratoru? tohle prozkoumat jeste https://developer.github.com/v3/repos/comments/#list-commit-comments-for-a-repository
 
