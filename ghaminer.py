@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
 import os
+import sys
 import argparse
 import random
 import datetime
 
 import github
+import pause
 from dateutil.parser import parse as parse_date
 from dateutil.relativedelta import relativedelta
 
@@ -51,9 +53,18 @@ ATTRS = [
 
     # contributors
     # informace o lidech, co nekdy zaslali commit
-    "contrib_count", "contrib_p25_1w", "contrib_p50_1w", "contrib_p75_1w",
+    "contrib_count", "contrib_others", "contrib_p25_1w", "contrib_p50_1w", "contrib_p75_1w",
     "contrib_p25_1m", "contrib_p50_1m", "contrib_p75_1m", "contrib_p25_6m", "contrib_p50_6m", "contrib_p75_6m",
     "contrib_p25_1y", "contrib_p50_1y", "contrib_p75_1y", "contrib_p25_all", "contrib_p50_all", "contrib_p75_all",
+    # # aktivita lidi, co za poslednich X mesicu napsali aspon 75%
+    # "contrib_1w_avgact_1w", "contrib_1w_avgact_1m", "contrib_1w_avgact_6m", "contrib_1w_avgact_1y",
+    # "contrib_1m_avgact_1w", "contrib_1m_avgact_1m", "contrib_1m_avgact_6m", "contrib_1m_avgact_1y",
+    # "contrib_6m_avgact_1w", "contrib_6m_avgact_1m", "contrib_6m_avgact_6m", "contrib_6m_avgact_1y",
+    # "contrib_1y_avgact_1w", "contrib_1y_avgact_1m", "contrib_1y_avgact_6m", "contrib_1y_avgact_1y"
+
+    # commit comments
+    # informace o frekvencich komentaru commitu
+    "ccomments_count", "ccomments_f_1w", "ccomments_f_1m", "ccomments_f_6m", "ccomments_f_1y", "ccomments_f_all",
 
     # hodnoty pro predikci
     "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
@@ -66,28 +77,36 @@ get_issues_date = lambda x: parse_date(x['created_at']).date()
 get_time_to_close = lambda x: (parse_date(x['closed_at']).date() - parse_date(x['created_at']).date()).days
 
 # tyto prvky budu muset omezit casem:
-# stargazers_count forks_count watchers_count subscribers_count
+# stargazers_count forks_count
 
 
 class RepoNotValid(Exception):
     """Repozitar neni validni - neni vhodny pro dolovani (neobsahuje data...)"""
 
 
-def download_all(download_obj, **kwargs):
+def download_all(gh, download_obj, **kwargs):
     """Vola prikaz pro ziskani dat opakovane se zvysujicim se argumentem page.
 
+    :param github.GitHub gh: instance objektu GitHub
     :param download_obj: objekt, ktery se ma pouzit pro ziskani dat
     :return: ziskana data
     """
     page = 1
     values = []
     while True:
-        result = download_obj.get(page=page, **kwargs)
-        if len(result) > 0:
-            values.extend(result)
-            page += 1
-        else:
-            break
+        try:
+            result = download_obj.get(page=page, **kwargs)
+            if len(result) > 0:
+                values.extend(result)
+                page += 1
+            else:
+                break
+        except github.ApiError as e:
+            if gh.x_ratelimit_remaining == 0:
+                pause.until(gh.x_ratelimit_reset)
+            else:
+                print "Got GitHub API error:", e
+                sys.exit(1)
     return values
 
 
@@ -143,7 +162,7 @@ def get_all_commits(gh, login, name):
     :return: pole vsech commitu, udaje o trvani repozitare
     :rtype: [dict], datetime.datetime, datetime.datetime
     """
-    commits = download_all(gh.repos(login)(name).commits())
+    commits = download_all(gh, gh.repos(login)(name).commits())
     if len(commits) == 0:
         raise RepoNotValid  # prazdny repozitar je k nicemu
 
@@ -168,7 +187,7 @@ def get_all_issues_pulls(gh, login, name):
     :rtype: ([(dict, [dict])], [(dict, [dict])])
     """
     # ziskam seznam vsech issues a pull requestu
-    issues_pulls = download_all(gh.repos(login)(name).issues(), state="all", direction="asc")
+    issues_pulls = download_all(gh, gh.repos(login)(name).issues(), state="all", direction="asc")
 
     # roztridim na issues a pull requests
     issues = []
@@ -182,10 +201,10 @@ def get_all_issues_pulls(gh, login, name):
     issues_comm = []
     pulls_comm = []
     for i in issues:
-        comments = download_all(gh.repos(login)(name).issues()(i['number']).comments())
+        comments = download_all(gh, gh.repos(login)(name).issues()(i['number']).comments())
         issues_comm.append((i, comments))
     for p in pulls:
-        comments = download_all(gh.repos(login)(name).issues()(p['number']).comments())
+        comments = download_all(gh, gh.repos(login)(name).issues()(p['number']).comments())
         pulls_comm.append((p, comments))
     return issues_comm, pulls_comm
 
@@ -323,7 +342,7 @@ def get_all_events(gh, login, name):
     :return: seznam vsech udalosti repozitare
     :rtype: list
     """
-    events = download_all(gh.repos(login)(name).events())
+    events = download_all(gh, gh.repos(login)(name).events())
     return events
 
 
@@ -337,7 +356,7 @@ def get_events_stats(events, time_created, point_in_time):
     :rtype: list
     """
     events_before = [e for e in events if get_issues_date(e) <= point_in_time]
-    values = [str(len(events)),
+    values = [str(len(events_before)),
               str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
                                              relativedelta(weeks=-1))),
               str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
@@ -361,21 +380,24 @@ def get_contributors_stats(commits, time_created, point_in_time):
     """
     values = []
     contrib_times = {}
+    others = []
 
     # ziskam slovnik {autor: seznam dat commitu}
     for c in commits:
-        if c['author'] is None:
-            continue
         commit_date = get_commit_date(c)
         if point_in_time < commit_date:
             continue
-        author = c['author']['login']
-        if author in contrib_times:
-            contrib_times[author].append(commit_date)
+        if c['author'] is None:
+            others.append(commit_date)
         else:
-            contrib_times[author] = [commit_date]
+            author = c['author']['login']
+            if author in contrib_times:
+                contrib_times[author].append(commit_date)
+            else:
+                contrib_times[author] = [commit_date]
 
-    values.append(len(contrib_times))
+    values.append(str(len(contrib_times)))
+    values.append(str(len(others)))
 
     for td in [relativedelta(weeks=-1), relativedelta(months=-1), relativedelta(months=-6), relativedelta(years=-1)]:
         values.append(str(gm.compute_delta_contrib_count(contrib_times, 25, time_created, point_in_time, td)))
@@ -386,14 +408,62 @@ def get_contributors_stats(commits, time_created, point_in_time):
     values.append(str(gm.compute_contrib_count(contrib_times, 50, time_created, point_in_time)))
     values.append(str(gm.compute_contrib_count(contrib_times, 75, time_created, point_in_time)))
 
-    for td in [relativedelta(weeks=-1), relativedelta(months=-1), relativedelta(months=-6), relativedelta(years=-1)]:
-        # ziskam X nejaktivnejsich lidi, kteri dohromady zaslali aspon 75 % zmen
+    # bohuzel nemohu pouzit pro data mining, protoze udalosti se ukladaji jenom 90 dni zpet
+    # activity = {}
+    # for td in [relativedelta(weeks=-1), relativedelta(months=-1), relativedelta(months=-6), relativedelta(years=-1)]:
+    #     # ziskam X nejaktivnejsich lidi, kteri dohromady zaslali aspon 75 % zmen
+    #     # dle https://developer.github.com/v3/activity/events/ je zahrnuto max 300 udalosti za max poslednich 90 dni
+    #     most_active = gm.compute_delta_contrib(contrib_times, 75, time_created, point_in_time, td)
+    #     for user in most_active:
+    #         if user not in activity:
+    #             events = download_all(gh.users()(user).events())
+    #             activity[user] = events
+    #
+    #     for atd in [relativedelta(weeks=-1), relativedelta(months=-1), relativedelta(months=-6),
+    #                 relativedelta(years=-1)]:
+    #         avg = 0.0
+    #         for user in activity:
+    #             avg += gm.compute_delta_freq_func(activity[user], get_issues_date, time_created, point_in_time, atd)
+    #         avg /= len(activity)
+    #
+    #         values.append(str(avg))
 
-        # dle https://developer.github.com/v3/activity/events/ je zahrnuto max 300 udalosti za max poslednich 90 dni
-        most_active = gm.compute_delta_contrib(contrib_times, 75, time_created, point_in_time, td)
-        print most_active
-        # TODO: ziskat jejich aktivity, frekvenci, prumerovat
+    return values
 
+
+def get_all_commit_comments(gh, login, name):
+    """Ziska seznam vsech komentaru ke commitum
+
+    :param github.GitHub gh: instance objektu GitHub
+    :param string login: login vlastnika repozitare
+    :param string name: nazev repozitare
+    :return: seznam vsech commit komentaru
+    :rtype: list
+    """
+    comments = download_all(gh, gh.repos(login)(name).comments())
+    return comments
+
+
+def get_commit_comments_stats(ccomments, time_created, point_in_time):
+    """Ziska informace o komentarich v zadany cas.
+
+    :param [dict] ccomments: pole vsech komentaru
+    :param datetime.datetime time_created: cas vytvoreni repozitare
+    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :return: pole hodnot, ktere se maji pridat k atributum objektu
+    :rtype: list
+    """
+    comments_before = [e for e in ccomments if get_issues_date(e) <= point_in_time]
+    values = [str(len(comments_before)),
+              str(gm.compute_delta_freq_func(comments_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(weeks=-1))),
+              str(gm.compute_delta_freq_func(comments_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(months=-1))),
+              str(gm.compute_delta_freq_func(comments_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(months=-6))),
+              str(gm.compute_delta_freq_func(comments_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(years=-1))),
+              str(gm.compute_freq_func(comments_before, get_issues_date, time_created, point_in_time))]
     return values
 
 
@@ -437,6 +507,10 @@ def get_repo_stats(gh, login, name):
 
     # Informace o contributors
     values.extend(get_contributors_stats(commits, time_created, point_in_time))
+
+    # Informace o commit comments
+    ccomments = get_all_commit_comments(gh, login, name)
+    values.extend(get_commit_comments_stats(ccomments, time_created, point_in_time))
 
     # Hodnoty pro predikci:
     # ziskam aktivitu v bode podle frekvenci
@@ -490,12 +564,11 @@ def main(sample_count, output):
 
                 f.write(", ".join(stats) + "\n")
 
-                # dale:
-                # participation https://developer.github.com/v3/repos/statistics/#participation
-                #
-                # contributors https://developer.github.com/v3/repos/#list-contributors and https://developer.github.com/v3/activity/events/#list-events-performed-by-a-user
-                # organizations bude asi jeste trochu problem?
-                # commit comments collaboratoru? tohle prozkoumat jeste https://developer.github.com/v3/repos/comments/#list-commit-comments-for-a-repository
+                # TODO: participation? jak se zmenila frekvence nejvlivnejsich lidi?
+
+                # TODO: forks https://developer.github.com/v3/repos/forks/
+                # TODO: stargazers
+                # TODO: watchers https://developer.github.com/v3/activity/watching/
 
                 percentage += one_part
                 print "\r%d %%" % percentage,
