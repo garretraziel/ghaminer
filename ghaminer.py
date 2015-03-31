@@ -76,12 +76,28 @@ get_commit_date = lambda x: parse_date(x['commit']['committer']['date']).date()
 get_issues_date = lambda x: parse_date(x['created_at']).date()
 get_time_to_close = lambda x: (parse_date(x['closed_at']).date() - parse_date(x['created_at']).date()).days
 
-# tyto prvky budu muset omezit casem:
-# stargazers_count forks_count
-
 
 class RepoNotValid(Exception):
     """Repozitar neni validni - neni vhodny pro dolovani (neobsahuje data...)"""
+
+
+def download(gh, download_obj, **kwargs):
+    """Zavola prikaz pro stahnuti, popripade pocka na rate limit, je-li treba.
+
+    :param github.GitHub gh: instance objektu GitHub
+    :param download_obj: objekt, ktery se ma pouzit pro ziskani dat
+    :return: ziskana data
+    """
+    while True:
+        try:
+            result = download_obj.get(**kwargs)
+            return result
+        except github.ApiError as e:
+            if gh.x_ratelimit_remaining == 0:
+                pause.until(gh.x_ratelimit_reset)
+            else:
+                print "Got GitHub API error:", e
+                sys.exit(1)
 
 
 def download_all(gh, download_obj, **kwargs):
@@ -94,19 +110,12 @@ def download_all(gh, download_obj, **kwargs):
     page = 1
     values = []
     while True:
-        try:
-            result = download_obj.get(page=page, **kwargs)
-            if len(result) > 0:
-                values.extend(result)
-                page += 1
-            else:
-                break
-        except github.ApiError as e:
-            if gh.x_ratelimit_remaining == 0:
-                pause.until(gh.x_ratelimit_reset)
-            else:
-                print "Got GitHub API error:", e
-                sys.exit(1)
+        result = download(gh, download_obj, page=page, **kwargs)
+        if len(result) > 0:
+            values.extend(result)
+            page += 1
+        else:
+            break
     return values
 
 
@@ -477,7 +486,7 @@ def get_repo_stats(gh, login, name):
     :rtype: list
     """
     # Obecne informace
-    r = gh.repos(login)(name).get()
+    r = download(gh, gh.repos(login)(name))
     # vyberu to, co mohu ziskat primo, bez zapojeni casu
     values = [str(r[attr]) for attr in DIRECT_REPO_INFO]
 
@@ -541,7 +550,6 @@ def main(sample_count, output):
     """
     gh = github.GitHub(username=os.getenv("GH_USERNAME"), password=os.getenv("GH_PASSWORD"))
 
-    used_ids = {}
     remaining = sample_count
     one_part = 100.0 / sample_count
     percentage = 0
@@ -549,13 +557,9 @@ def main(sample_count, output):
         f.write(", ".join(ATTRS) + "\n")
 
         while remaining > 0:
-            # ziskej nahodny repozitar, ktery jeste nebyl pouzity
+            # ziskej nahodny repozitar (klidne uz i pouzity)
             rindex = random.randint(0, MAX_ID)
-            while used_ids.get(rindex, False):
-                rindex = random.randint(0, MAX_ID)
-            used_ids[rindex] = True
-
-            resp = gh.repositories().get(since=rindex)
+            resp = download(gh, gh.repositories(), since=rindex)
             s = resp[0]
 
             # ziskej z neho data. pokud nelze pouzit, pokracuj, ale nesnizuj zbyvajici pocet
@@ -567,7 +571,6 @@ def main(sample_count, output):
                 # TODO: participation? jak se zmenila frekvence nejvlivnejsich lidi?
 
                 # TODO: forks https://developer.github.com/v3/repos/forks/
-                # TODO: stargazers
                 # TODO: watchers https://developer.github.com/v3/activity/watching/
 
                 percentage += one_part
