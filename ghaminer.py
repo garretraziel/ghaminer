@@ -400,7 +400,7 @@ def get_contributors_stats(commits, time_created, point_in_time):
         commit_date = get_commit_date(c)
         if point_in_time < commit_date:
             continue
-        if c['author'] is None or c['author']['login'] is None:
+        if c['author'] is None or 'login' not in c['author'] or c['author']['login'] is None:
             others.append(commit_date)
         else:
             author = c['author']['login']
@@ -620,7 +620,7 @@ def main(sample_count, output):
 
                 remaining -= 1
 
-            except (RepoNotValid, github.ApiError):
+            except (RepoNotValid, github.ApiError, KeyError):
                 pass
 
 
