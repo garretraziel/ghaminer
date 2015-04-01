@@ -66,6 +66,10 @@ ATTRS = [
     # informace o frekvencich komentaru commitu
     "ccomments_count", "ccomments_f_1w", "ccomments_f_1m", "ccomments_f_6m", "ccomments_f_1y", "ccomments_f_all",
 
+    # forks
+    # informace o frekvencich forkovani
+    "forks_count", "forks_f_1w", "forks_f_1m", "forks_f_6m", "forks_f_1y", "forks_f_all",
+
     # hodnoty pro predikci
     "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
@@ -97,7 +101,7 @@ def download(gh, download_obj, **kwargs):
                 pause.until(gh.x_ratelimit_reset)
             else:
                 print "Got GitHub API error:", e
-                sys.exit(1)
+                raise
 
 
 def download_all(gh, download_obj, **kwargs):
@@ -476,6 +480,42 @@ def get_commit_comments_stats(ccomments, time_created, point_in_time):
     return values
 
 
+def get_all_forks(gh, login, name):
+    """Ziska seznam vsech forku.
+
+    :param github.GitHub gh: instance objektu GitHub
+    :param string login: login vlastnika repozitare
+    :param string name: nazev repozitare
+    :return: seznam vsech forku
+    :rtype: list
+    """
+    forks = download_all(gh, gh.repos(login)(name).forks())
+    return forks
+
+
+def get_forks_stats(forks, time_created, point_in_time):
+    """Ziska informace o komentarich v zadany cas.
+
+    :param [dict] forks: pole vsech forku
+    :param datetime.datetime time_created: cas vytvoreni repozitare
+    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :return: pole hodnot, ktere se maji pridat k atributum objektu
+    :rtype: list
+    """
+    forks_before = [e for e in forks if get_issues_date(e) <= point_in_time]
+    values = [str(len(forks_before)),
+              str(gm.compute_delta_freq_func(forks_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(weeks=-1))),
+              str(gm.compute_delta_freq_func(forks_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(months=-1))),
+              str(gm.compute_delta_freq_func(forks_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(months=-6))),
+              str(gm.compute_delta_freq_func(forks_before, get_issues_date, time_created, point_in_time,
+                                             relativedelta(years=-1))),
+              str(gm.compute_freq_func(forks_before, get_issues_date, time_created, point_in_time))]
+    return values
+
+
 def get_repo_stats(gh, login, name):
     """Ziska veskere statistiky k zadanemu repozitari.
 
@@ -520,6 +560,10 @@ def get_repo_stats(gh, login, name):
     # Informace o commit comments
     ccomments = get_all_commit_comments(gh, login, name)
     values.extend(get_commit_comments_stats(ccomments, time_created, point_in_time))
+
+    # Informace o forcich repozitare
+    forks = get_all_forks(gh, login, name)
+    values.extend(get_forks_stats(forks, time_created, point_in_time))
 
     # Hodnoty pro predikci:
     # ziskam aktivitu v bode podle frekvenci
@@ -569,8 +613,6 @@ def main(sample_count, output):
                 f.write(", ".join(stats) + "\n")
 
                 # TODO: participation? jak se zmenila frekvence nejvlivnejsich lidi?
-
-                # TODO: forks https://developer.github.com/v3/repos/forks/
                 # TODO: watchers https://developer.github.com/v3/activity/watching/
 
                 percentage += one_part
