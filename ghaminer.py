@@ -120,6 +120,9 @@ def download_all(gh, download_obj, **kwargs):
         if len(result) > 0:
             values.extend(result)
             page += 1
+            if page > 2000:
+                print "ERR: Repo too large, skipping..."
+                raise RepoNotValid("too large")
         else:
             break
     return values
