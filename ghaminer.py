@@ -98,9 +98,11 @@ def download(gh, download_obj, **kwargs):
             return result
         except github.ApiError as e:
             if gh.x_ratelimit_remaining == 0:
+                print "INFO: waiting for ratelimit"
                 pause.until(gh.x_ratelimit_reset)
+                print "INFO: continuing..."
             else:
-                print "Got GitHub API error:", e
+                print "ERR: Got GitHub API error:", e
                 raise
 
 
@@ -525,6 +527,7 @@ def get_repo_stats(gh, login, name):
     :return: seznam vsech atributu repozitare
     :rtype: list
     """
+    print "INFO: downloading", login + "/" + name
     # Obecne informace
     r = download(gh, gh.repos(login)(name))
     # vyberu to, co mohu ziskat primo, bez zapojeni casu
@@ -532,6 +535,7 @@ def get_repo_stats(gh, login, name):
 
     # Informace o commitech
     # ziskam seznam vsech commitu
+    print "  downloading commits..."
     commits, time_created, time_ended = get_all_commits(gh, login, name)
     values.append(time_created.isoformat())
 
@@ -543,29 +547,40 @@ def get_repo_stats(gh, login, name):
     values.append(point_in_time.isoformat())
 
     # ziskam dalsi statistiky o commitech
+    print "  analyzing commits..."
     values.extend(get_commits_stats(commits, time_created, point_in_time))
 
     # Informace o issues
+    print "  downloading issues..."
     issues, pulls = get_all_issues_pulls(gh, login, name)
+    print "  analyzing issues..."
     values.extend(get_issues_stats(issues, time_created, point_in_time))
     values.extend(get_issues_stats(pulls, time_created, point_in_time))
 
     # Informace o udalostech
+    print "  downloading events..."
     events = get_all_events(gh, login, name)
+    print "  analyzing events..."
     values.extend(get_events_stats(events, time_created, point_in_time))
 
     # Informace o contributors
+    print "  analyzing contributors..."
     values.extend(get_contributors_stats(commits, time_created, point_in_time))
 
     # Informace o commit comments
+    print "  downloading comments..."
     ccomments = get_all_commit_comments(gh, login, name)
+    print "  analyzing comments..."
     values.extend(get_commit_comments_stats(ccomments, time_created, point_in_time))
 
     # Informace o forcich repozitare
+    print "  downloading forks..."
     forks = get_all_forks(gh, login, name)
+    print "  analyzing forks..."
     values.extend(get_forks_stats(forks, time_created, point_in_time))
 
     # Hodnoty pro predikci:
+    print " making predictions..."
     # ziskam aktivitu v bode podle frekvenci
     values.append(str(compute_commit_freq_activity(commits, point_in_time)))
     # ziskam aktivitu v bode podle procent
@@ -616,7 +631,8 @@ def main(sample_count, output):
                 # TODO: watchers https://developer.github.com/v3/activity/watching/
 
                 percentage += one_part
-                print "%d %%" % percentage
+                print "%.3f %%" % percentage
+                print "---"
 
                 remaining -= 1
 
