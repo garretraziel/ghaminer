@@ -616,7 +616,7 @@ def main(sample_count, output):
                 # TODO: watchers https://developer.github.com/v3/activity/watching/
 
                 percentage += one_part
-                print "\r%d %%" % percentage,
+                print "%d %%" % percentage
 
                 remaining -= 1
 
