@@ -620,7 +620,7 @@ def main(sample_count, output):
 
                 remaining -= 1
 
-            except (RepoNotValid, github.ApiError, KeyError):
+            except (RepoNotValid, github.ApiError, KeyError, MemoryError):
                 pass
 
 
