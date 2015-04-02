@@ -5,6 +5,7 @@ import argparse
 import random
 import datetime
 import urllib2
+import ssl
 
 import github
 import pause
@@ -646,7 +647,7 @@ def main(sample_count, output):
 
                 remaining -= 1
 
-            except (RepoNotValid, github.ApiError, KeyError, MemoryError, urllib2.URLError):
+            except (RepoNotValid, github.ApiError, KeyError, MemoryError, urllib2.URLError, ssl.SSLError):
                 pass
 
 
