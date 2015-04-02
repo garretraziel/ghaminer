@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
 import os
-import sys
 import argparse
 import random
 import datetime
+import urllib2
 
 import github
 import pause
@@ -646,7 +646,7 @@ def main(sample_count, output):
 
                 remaining -= 1
 
-            except (RepoNotValid, github.ApiError, KeyError, MemoryError):
+            except (RepoNotValid, github.ApiError, KeyError, MemoryError, urllib2.URLError):
                 pass
 
 
