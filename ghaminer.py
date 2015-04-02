@@ -528,6 +528,13 @@ def get_repo_stats(gh, login, name):
     :rtype: list
     """
     print "INFO: downloading", login + "/" + name
+
+    if name == "linux":
+        # repozitar linux ma pul milionu commitu a spoustu forku
+        # je zbytecne nakladne ho analyzovat
+        print "skipping linux..."
+        raise RepoNotValid
+
     # Obecne informace
     r = download(gh, gh.repos(login)(name))
     # vyberu to, co mohu ziskat primo, bez zapojeni casu
