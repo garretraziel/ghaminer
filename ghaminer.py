@@ -556,8 +556,8 @@ def get_repo_stats(gh, login, name):
     if r["fork"]:
         # pokud se jedna o fork, beru cas az od forknuti
         time_forked = get_direct_date(r)
-        random_days = random.randint(0, (time_ended - time_forked).days)
-        random_days = max(0, random_days)
+        duration = max(0, (time_ended - time_forked).days)
+        random_days = random.randint(0, duration)
         point_in_time = time_forked + datetime.timedelta(days=random_days)
     else:
         random_days = random.randint(0, (time_ended - time_created).days)
