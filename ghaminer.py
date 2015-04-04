@@ -78,7 +78,7 @@ OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_is
                    "subscribers_count", "updated_at", "pushed_at"]
 one_day = datetime.timedelta(days=1)
 get_commit_date = lambda x: parse_date(x['commit']['committer']['date']).date()
-get_issues_date = lambda x: parse_date(x['created_at']).date()
+get_direct_date = lambda x: parse_date(x['created_at']).date()
 get_time_to_close = lambda x: (parse_date(x['closed_at']).date() - parse_date(x['created_at']).date()).days
 
 
@@ -274,9 +274,9 @@ def get_issues_stats(issues, time_created, point_in_time):
     flattened_comments = []
     closed_issues = []
     for issue, comments in issues:
-        if get_issues_date(issue) > point_in_time:
+        if get_direct_date(issue) > point_in_time:
             continue
-        comments_for = [c for c in comments if get_issues_date(c) <= point_in_time]
+        comments_for = [c for c in comments if get_direct_date(c) <= point_in_time]
         comments_dict[issue['number']] = comments_for
         flattened_comments.extend(comments_for)
         issues_before.append(issue)
@@ -287,67 +287,67 @@ def get_issues_stats(issues, time_created, point_in_time):
     # ziskam frekvenci issues za posledni tyden, mesic, pulrok, rok, celkovou dobu
     values.append(str(len(issues_before)))
     values.append(str(
-        gm.compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time,
+        gm.compute_delta_freq_func(issues_before, get_direct_date, time_created, point_in_time,
                                    relativedelta(weeks=-1))))
     values.append(str(
-        gm.compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time,
+        gm.compute_delta_freq_func(issues_before, get_direct_date, time_created, point_in_time,
                                    relativedelta(months=-1))))
     values.append(str(
-        gm.compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time,
+        gm.compute_delta_freq_func(issues_before, get_direct_date, time_created, point_in_time,
                                    relativedelta(months=-6))))
     values.append(str(
-        gm.compute_delta_freq_func(issues_before, get_issues_date, time_created, point_in_time,
+        gm.compute_delta_freq_func(issues_before, get_direct_date, time_created, point_in_time,
                                    relativedelta(years=-1))))
-    values.append(str(gm.compute_freq_func(issues_before, get_issues_date, time_created, point_in_time)))
+    values.append(str(gm.compute_freq_func(issues_before, get_direct_date, time_created, point_in_time)))
 
     # informace o zavrenych issues
     values.append(str(len(closed_issues)))
 
     values.append(str(
-        gm.compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time,
+        gm.compute_delta_freq_func(closed_issues, get_direct_date, time_created, point_in_time,
                                    relativedelta(weeks=-1))))
     values.append(str(
-        gm.compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time,
+        gm.compute_delta_freq_func(closed_issues, get_direct_date, time_created, point_in_time,
                                    relativedelta(months=-1))))
     values.append(str(
-        gm.compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time,
+        gm.compute_delta_freq_func(closed_issues, get_direct_date, time_created, point_in_time,
                                    relativedelta(months=-6))))
     values.append(str(
-        gm.compute_delta_freq_func(closed_issues, get_issues_date, time_created, point_in_time,
+        gm.compute_delta_freq_func(closed_issues, get_direct_date, time_created, point_in_time,
                                    relativedelta(years=-1))))
-    values.append(str(gm.compute_freq_func(closed_issues, get_issues_date, time_created, point_in_time)))
+    values.append(str(gm.compute_freq_func(closed_issues, get_direct_date, time_created, point_in_time)))
 
     # cas, jak dlouho trvalo zavrit issue
     values.append(
-        str(gm.compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
+        str(gm.compute_delta_avg_func(closed_issues, get_direct_date, get_time_to_close, time_created, point_in_time,
                                       relativedelta(weeks=-1))))
     values.append(
-        str(gm.compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
+        str(gm.compute_delta_avg_func(closed_issues, get_direct_date, get_time_to_close, time_created, point_in_time,
                                       relativedelta(months=-1))))
     values.append(
-        str(gm.compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
+        str(gm.compute_delta_avg_func(closed_issues, get_direct_date, get_time_to_close, time_created, point_in_time,
                                       relativedelta(months=-6))))
     values.append(
-        str(gm.compute_delta_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time,
+        str(gm.compute_delta_avg_func(closed_issues, get_direct_date, get_time_to_close, time_created, point_in_time,
                                       relativedelta(years=-1))))
     values.append(
-        str(gm.compute_avg_func(closed_issues, get_issues_date, get_time_to_close, time_created, point_in_time)))
+        str(gm.compute_avg_func(closed_issues, get_direct_date, get_time_to_close, time_created, point_in_time)))
 
     # ziskam frekvenci komentaru za posledni tyden, mesic, pulrok, rok, celkovou dobu
     values.append(str(len(flattened_comments)))
     values.append(
-        str(gm.compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
+        str(gm.compute_delta_freq_func(flattened_comments, get_direct_date, time_created, point_in_time,
                                        relativedelta(weeks=-1))))
     values.append(
-        str(gm.compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
+        str(gm.compute_delta_freq_func(flattened_comments, get_direct_date, time_created, point_in_time,
                                        relativedelta(months=-1))))
     values.append(
-        str(gm.compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
+        str(gm.compute_delta_freq_func(flattened_comments, get_direct_date, time_created, point_in_time,
                                        relativedelta(months=-6))))
     values.append(
-        str(gm.compute_delta_freq_func(flattened_comments, get_issues_date, time_created, point_in_time,
+        str(gm.compute_delta_freq_func(flattened_comments, get_direct_date, time_created, point_in_time,
                                        relativedelta(years=-1))))
-    values.append(str(gm.compute_freq_func(flattened_comments, get_issues_date, time_created, point_in_time)))
+    values.append(str(gm.compute_freq_func(flattened_comments, get_direct_date, time_created, point_in_time)))
 
     return values
 
@@ -374,17 +374,17 @@ def get_events_stats(events, time_created, point_in_time):
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
-    events_before = [e for e in events if get_issues_date(e) <= point_in_time]
+    events_before = [e for e in events if get_direct_date(e) <= point_in_time]
     values = [str(len(events_before)),
-              str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(events_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(weeks=-1))),
-              str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(events_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(months=-1))),
-              str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(events_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(months=-6))),
-              str(gm.compute_delta_freq_func(events_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(events_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(years=-1))),
-              str(gm.compute_freq_func(events_before, get_issues_date, time_created, point_in_time))]
+              str(gm.compute_freq_func(events_before, get_direct_date, time_created, point_in_time))]
     return values
 
 
@@ -472,17 +472,17 @@ def get_commit_comments_stats(ccomments, time_created, point_in_time):
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
-    comments_before = [e for e in ccomments if get_issues_date(e) <= point_in_time]
+    comments_before = [e for e in ccomments if get_direct_date(e) <= point_in_time]
     values = [str(len(comments_before)),
-              str(gm.compute_delta_freq_func(comments_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(comments_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(weeks=-1))),
-              str(gm.compute_delta_freq_func(comments_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(comments_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(months=-1))),
-              str(gm.compute_delta_freq_func(comments_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(comments_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(months=-6))),
-              str(gm.compute_delta_freq_func(comments_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(comments_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(years=-1))),
-              str(gm.compute_freq_func(comments_before, get_issues_date, time_created, point_in_time))]
+              str(gm.compute_freq_func(comments_before, get_direct_date, time_created, point_in_time))]
     return values
 
 
@@ -508,17 +508,17 @@ def get_forks_stats(forks, time_created, point_in_time):
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
-    forks_before = [e for e in forks if get_issues_date(e) <= point_in_time]
+    forks_before = [e for e in forks if get_direct_date(e) <= point_in_time]
     values = [str(len(forks_before)),
-              str(gm.compute_delta_freq_func(forks_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(forks_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(weeks=-1))),
-              str(gm.compute_delta_freq_func(forks_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(forks_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(months=-1))),
-              str(gm.compute_delta_freq_func(forks_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(forks_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(months=-6))),
-              str(gm.compute_delta_freq_func(forks_before, get_issues_date, time_created, point_in_time,
+              str(gm.compute_delta_freq_func(forks_before, get_direct_date, time_created, point_in_time,
                                              relativedelta(years=-1))),
-              str(gm.compute_freq_func(forks_before, get_issues_date, time_created, point_in_time))]
+              str(gm.compute_freq_func(forks_before, get_direct_date, time_created, point_in_time))]
     return values
 
 
@@ -551,8 +551,16 @@ def get_repo_stats(gh, login, name):
     values.append(time_created.isoformat())
 
     # ziskam nahodny bod v prubehu vyvoje projektu
-    random_days = random.randint(0, (time_ended - time_created).days)  # TODO: forky brat az od forknuti?
-    point_in_time = time_created + datetime.timedelta(days=random_days)
+    if r["fork"]:
+        # pokud se jedna o fork, beru cas az od forknuti
+        time_forked = get_direct_date(r)
+        random_days = random.randint(0, (time_ended - time_forked).days)
+        random_days = max(0, random_days)
+        point_in_time = time_forked + datetime.timedelta(days=random_days)
+    else:
+        random_days = random.randint(0, (time_ended - time_created).days)
+        point_in_time = time_created + datetime.timedelta(days=random_days)
+    print point_in_time
     duration = (point_in_time - time_created).days + 1
     values.append(str(duration))
     values.append(point_in_time.isoformat())
