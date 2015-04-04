@@ -562,7 +562,6 @@ def get_repo_stats(gh, login, name):
     else:
         random_days = random.randint(0, (time_ended - time_created).days)
         point_in_time = time_created + datetime.timedelta(days=random_days)
-    print point_in_time
     duration = (point_in_time - time_created).days + 1
     values.append(str(duration))
     values.append(point_in_time.isoformat())
