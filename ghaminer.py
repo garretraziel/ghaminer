@@ -105,6 +105,8 @@ def download(gh, download_obj, **kwargs):
             else:
                 print "ERR: Got GitHub API error:", e
                 raise
+        except (urllib2.URLError, ssl.SSLError):
+            print "ERR: Got SSL error..."
 
 
 def download_all(gh, download_obj, **kwargs):
@@ -655,7 +657,7 @@ def main(sample_count, output):
 
                 remaining -= 1
 
-            except (RepoNotValid, github.ApiError, KeyError, MemoryError, urllib2.URLError, ssl.SSLError):
+            except (RepoNotValid, github.ApiError, KeyError, MemoryError):
                 pass
 
 
