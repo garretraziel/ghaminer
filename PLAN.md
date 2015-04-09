@@ -80,3 +80,11 @@
 - musím si od teď dát pozor na pusu. měním pojmy, se kterými pracuji. aktivita od teď bude okamžitá, definovaná jako počet zaslání za poslední měsíc
 - to co budu ve skutečnosti dolovat je "míra budoucího vývoje projektu", která je definována jako podíl aktivity příštího měsíce a aktuálního měsíce
     - to znamená, že pokud je větší než jedna, bude aktivita projektu růst, pokud bude jedna, bude stejná, pokud bude menší než jedna, bude aktivita klesat, pokud se bude blížit nule, projekt přestane být aktivní
+
+# Konečné řešení
+- aktivitu musím nahradit termínem "míra budoucího vývoje"
+- mám tři různé definice aktivity - poměr dosavadní a budoucí frekvence změn, procento commitů co zbývá a budoucí frekvence (budoucího týdne, měsíce, půl roku, roku) - tady si budu moct pohrát s grafama
+- budoucí míru vývoje nejlépe popisuje budoucí frekvence, přičemž v závislosti na dobu existence repozitáře to je příštý týden, půl rok, případně rok. bohužel, nejlepší odhady získám na procenta commitů, proto to bude taky to, co budu odhadovat
+- zkouším nejrůznější metody - nejdřív Weka a vyhodnocování, z Weky jako nejlepší vypadl RandomForrest (korelační koeficient 0.65, RMSE 19 - dalo by se usuzovat na úspěšnost cca 80 %). Po experimentech ve scikit-learn (další spousta grafů) zatím nejlíp vypadá metoda GradientBoostingRegressor s RMSE 17.
+- binning a následná klasifikace moc nefungují - zřejmě je to způsobeno tím, že funkce, co ohodnocuje správně vs. špatně klasifikovaný nebere v potaz jak velká vzdálenost od správné klasifikace byla
+- možná není špatný nápad provést po regresi následné rozdělení do X (nejspíš tří) skupin - přesná hodnota uživatele stejně nezajimá a z části se tím potře chyba - zajimavé je, že i po binningu do tří skupin to háže stejnou hodnotu korelačního koeficientu (a RMSE je 0.44, nicméně to je trochu nicneříkající)
