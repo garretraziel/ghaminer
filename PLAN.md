@@ -88,3 +88,7 @@
 - zkouším nejrůznější metody - nejdřív Weka a vyhodnocování, z Weky jako nejlepší vypadl RandomForrest (korelační koeficient 0.65, RMSE 19 - dalo by se usuzovat na úspěšnost cca 80 %). Po experimentech ve scikit-learn (další spousta grafů) zatím nejlíp vypadá metoda GradientBoostingRegressor s RMSE 17.
 - binning a následná klasifikace moc nefungují - zřejmě je to způsobeno tím, že funkce, co ohodnocuje správně vs. špatně klasifikovaný nebere v potaz jak velká vzdálenost od správné klasifikace byla
 - možná není špatný nápad provést po regresi následné rozdělení do X (nejspíš tří) skupin - přesná hodnota uživatele stejně nezajimá a z části se tím potře chyba - zajimavé je, že i po binningu do tří skupin to háže stejnou hodnotu korelačního koeficientu (a RMSE je 0.44, nicméně to je trochu nicneříkající)
+
+# Další poznatky
+- napsat do DIP, že by pro výslednou aplikaci bylo vhodné, pokud by bylo potřeba škálovat, použít http://en.wikipedia.org/wiki/Time_series_database
+- měl bych tam možná popsat výběr GitHub knihovny, popřípadě jeho API
