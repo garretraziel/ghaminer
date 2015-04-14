@@ -7,3 +7,15 @@
 3. prozkoumani dostupnych API
 4. popis vybrane sluzby?
 5. popis a zduvodneni ziskavani data setu
+6. 
+
+## Co musím zmínit
+
+- úvod o dolování z dat
+- příklady sociálních sítí
+- zdůvodnění, proč jsem si vybral GitHub
+- popis knihoven a API GitHubu
+- popis datasetu - dolovaných dat, popis získávané veličiny, možná i popis ghamineru
+- experimenty se získaným datasetem
+- popis výsledné aplikace
+- závěr
