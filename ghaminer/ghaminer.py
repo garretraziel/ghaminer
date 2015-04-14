@@ -524,6 +524,20 @@ def get_forks_stats(forks, time_created, point_in_time):
     return values
 
 
+def get_basic_repo_info(gh, login, name):
+    """Ziska zakladni informace o repozitari.
+
+    :param github.GitHub gh: instance objektu GitHub
+    :param string login: login vlastnika repozitare
+    :param string name: nazev repozitare
+    :return: list informaci o repozitari
+    :rtype: tuple
+    """
+    # Obecne informace
+    r = download(gh, gh.repos(login)(name))
+    return r["id"], r["full_name"], r["fork"], r["created_at"]
+
+
 def get_repo_stats(gh, login, name):
     """Ziska veskere statistiky k zadanemu repozitari.
 
@@ -542,9 +556,9 @@ def get_repo_stats(gh, login, name):
         raise RepoNotValid
 
     # Obecne informace
-    r = download(gh, gh.repos(login)(name))
     # vyberu to, co mohu ziskat primo, bez zapojeni casu
-    values = [str(r[attr]) for attr in DIRECT_REPO_INFO]
+    info = _, _, fork, created_at = get_basic_repo_info(gh, login, name)
+    values = [str(v) for v in info]
 
     # Informace o commitech
     # ziskam seznam vsech commitu
@@ -553,9 +567,9 @@ def get_repo_stats(gh, login, name):
     values.append(time_created.isoformat())
 
     # ziskam nahodny bod v prubehu vyvoje projektu
-    if r["fork"]:
+    if fork:
         # pokud se jedna o fork, beru cas az od forknuti
-        time_forked = get_direct_date(r)
+        time_forked = parse_date(created_at).date()
         duration = max(0, (time_ended - time_forked).days)
         random_days = random.randint(0, duration)
         point_in_time = time_forked + datetime.timedelta(days=random_days)
