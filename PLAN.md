@@ -91,3 +91,4 @@
 
 # Další poznatky
 - napsat do DIP, že by pro výslednou aplikaci bylo vhodné, pokud by bylo potřeba škálovat, použít http://en.wikipedia.org/wiki/Time_series_database
+- měl bych tam možná popsat výběr GitHub knihovny, popřípadě jeho API
