@@ -593,6 +593,10 @@ def get_repo_stats(gh, login, name, predict_all):
     print "  downloading commits..."
     commits, time_created, time_ended = get_all_commits(gh, login, name)
 
+    if (today - time_ended).year < 1:
+        print "skipping, too new"
+        raise RepoNotValid
+
     # ziskam nahodny bod v prubehu vyvoje projektu
     if fork:
         # pokud se jedna o fork, beru cas az od forknuti
