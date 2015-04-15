@@ -11,13 +11,16 @@ import github
 import pause
 from dateutil.parser import parse as parse_date
 from dateutil.relativedelta import relativedelta
+import numpy as np
 
 import ghamath as gm
 
 MAX_ID = 30500000  # zjisteno experimentalne TODO: tohle zjistit nejak lip
 ATTRS = [
     # zakladni informace
-    "id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit",
+    # v datasetu to akorat prekazi, nebudu je tam davat
+    # "id", "full_name", "fork", "created_at", "first_commit", "days_active", "last_commit",
+    "fork", "days_since_begin", "days_since_last_commit",
 
     # commits
     # informace o frekvencich commitu
@@ -72,7 +75,11 @@ ATTRS = [
     "forks_count", "forks_f_1w", "forks_f_1m", "forks_f_6m", "forks_f_1y", "forks_f_all",
 
     # hodnoty pro predikci
-    "freq_ratio", "percentage_remains", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"]
+    "percentage_remains"]
+REST_ATTRS = [
+    # hodnoty pro predikci
+    "freq_ratio", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"
+]
 DIRECT_REPO_INFO = ["id", "full_name", "fork", "created_at"]
 OTHER_REPO_INFO = ["stargazers_count", "forks_count", "watchers_count", "open_issues_count",
                    "subscribers_count", "updated_at", "pushed_at"]
@@ -171,7 +178,7 @@ def compute_commit_freq_activity(commits, point_in_time):
         return f_future / f_hist
     else:
         # pokud se projekt stale vyviji, nemohu pouzit frekvence
-        return -1
+        return np.NaN
 
 
 def get_all_commits(gh, login, name):
@@ -538,12 +545,31 @@ def get_basic_repo_info(gh, login, name):
     return r["id"], r["full_name"], r["fork"], r["created_at"]
 
 
-def get_repo_stats(gh, login, name):
+def get_latest_commit_for_date(commits, point_in_time):
+    """Ziska datum posledniho commitu pred bodem v case.
+
+    :param [dict] commits: seznam vsech commitu
+    :param datetime.date point_in_time: chvile, pro kterou se ma pocitat
+    :return: datum posledniho commitu pred point_in_time
+    :rtype: datetime.date
+    """
+    commits.sort(key=get_commit_date)
+    prev_date = get_commit_date(commits[0])
+    for commit in commits:
+        if get_commit_date(commit) > point_in_time:
+            return prev_date
+        else:
+            prev_date = get_commit_date(commit)
+    return prev_date
+
+
+def get_repo_stats(gh, login, name, predict_all):
     """Ziska veskere statistiky k zadanemu repozitari.
 
     :param github.GitHub gh: instance objektu GitHub
     :param string login: login vlastnika repozitare
     :param string name: nazev repozitare
+    :param bool predict_all: pouzit i ostatni hodnoty predikce (krome percentage)
     :return: seznam vsech atributu repozitare
     :rtype: list
     """
@@ -555,30 +581,33 @@ def get_repo_stats(gh, login, name):
         print "skipping linux..."
         raise RepoNotValid
 
+    today = datetime.date.today()
+
     # Obecne informace
     # vyberu to, co mohu ziskat primo, bez zapojeni casu
-    info = _, _, fork, created_at = get_basic_repo_info(gh, login, name)
-    values = [str(v) for v in info]
+    _, _, fork, created_at = get_basic_repo_info(gh, login, name)
+    values = [str(fork)]
 
     # Informace o commitech
     # ziskam seznam vsech commitu
     print "  downloading commits..."
     commits, time_created, time_ended = get_all_commits(gh, login, name)
-    values.append(time_created.isoformat())
 
     # ziskam nahodny bod v prubehu vyvoje projektu
     if fork:
         # pokud se jedna o fork, beru cas az od forknuti
         time_forked = parse_date(created_at).date()
-        duration = max(0, (time_ended - time_forked).days)
+        duration = max(0, (today - time_forked).days)
         random_days = random.randint(0, duration)
         point_in_time = time_forked + datetime.timedelta(days=random_days)
     else:
-        random_days = random.randint(0, (time_ended - time_created).days)
+        random_days = random.randint(0, (today - time_created).days)
         point_in_time = time_created + datetime.timedelta(days=random_days)
     duration = (point_in_time - time_created).days + 1
     values.append(str(duration))
-    values.append(point_in_time.isoformat())
+    last_date = get_latest_commit_for_date(commits, point_in_time)
+    since_last_commit = (point_in_time - last_date).days
+    values.append(str(since_last_commit))
 
     # ziskam dalsi statistiky o commitech
     print "  analyzing commits..."
@@ -615,27 +644,28 @@ def get_repo_stats(gh, login, name):
 
     # Hodnoty pro predikci:
     print " making predictions..."
-    # ziskam aktivitu v bode podle frekvenci
-    values.append(str(compute_commit_freq_activity(commits, point_in_time)))
     # ziskam aktivitu v bode podle procent
     values.append(str(compute_perc_activity(commits, point_in_time)))
-    # ziskam aktivitu podle frekvence v pristim tydnu
-    values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
-                                                 relativedelta(weeks=1))))
-    # ziskam aktivitu podle frekvence v pristim mesici
-    values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
-                                                 relativedelta(months=1))))
-    # ziskam aktivitu podle frekvence v pristim pulroce
-    values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
-                                                 relativedelta(months=6))))
-    # ziskam aktivitu podle frekvence v pristim roce
-    values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
-                                                 relativedelta(years=1))))
+    if predict_all:
+        # ziskam aktivitu v bode podle frekvenci
+        values.append(str(compute_commit_freq_activity(commits, point_in_time)))
+        # ziskam aktivitu podle frekvence v pristim tydnu
+        values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
+                                                     relativedelta(weeks=1))))
+        # ziskam aktivitu podle frekvence v pristim mesici
+        values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
+                                                     relativedelta(months=1))))
+        # ziskam aktivitu podle frekvence v pristim pulroce
+        values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
+                                                     relativedelta(months=6))))
+        # ziskam aktivitu podle frekvence v pristim roce
+        values.append(str(gm.compute_delta_freq_func(commits, get_commit_date, time_created, point_in_time + one_day,
+                                                     relativedelta(years=1))))
 
     return values
 
 
-def main(sample_count, output):
+def main(sample_count, output, predict_all):
     """Hlavni funkce programu. Do vystupu zapise statistky o `sample_count` nahodnych repozitaru.
 
     :param int sample_count: pocet nahodnych repozitaru, ktere ma program najit
@@ -647,7 +677,10 @@ def main(sample_count, output):
     one_part = 100.0 / sample_count
     percentage = 0
     with open(output, "w", 1) as f:
-        f.write(", ".join(ATTRS) + "\n")
+        if predict_all:
+            f.write(",".join(ATTRS + REST_ATTRS) + "\n")
+        else:
+            f.write(",".join(ATTRS) + "\n")
 
         while remaining > 0:
             # ziskej nahodny repozitar (klidne uz i pouzity)
@@ -657,9 +690,9 @@ def main(sample_count, output):
 
             # ziskej z neho data. pokud nelze pouzit, pokracuj, ale nesnizuj zbyvajici pocet
             try:
-                stats = get_repo_stats(gh, s['owner']['login'], s['name'])
+                stats = get_repo_stats(gh, s['owner']['login'], s['name'], predict_all)
 
-                f.write(", ".join(stats) + "\n")
+                f.write(",".join(stats) + "\n")
 
                 # TODO: participation? jak se zmenila frekvence nejvlivnejsich lidi?
                 # TODO: watchers https://developer.github.com/v3/activity/watching/
@@ -678,6 +711,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Get Github repos dataset for GHAM project")
     parser.add_argument("-c", "--count", type=int, help="number of samples to download", default=100000)
     parser.add_argument("-o", "--output", help="name of the CSV output file", default="output.csv")
+    parser.add_argument("-a", "--all", type=bool, help="add all prediction values (not only percentage)", default=False)
     args = parser.parse_args()
 
-    main(args.count, args.output)
+    main(args.count, args.output, args.all)

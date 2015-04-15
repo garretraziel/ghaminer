@@ -53,7 +53,7 @@ def compute_delta_freq_func(values, get_date_func, time_created, point_in_time, 
         f = compute_freq_func(values, get_date_func, start, end)
         return f
     else:
-        return -1
+        return np.NaN
 
 
 def compute_avg_func(values, get_date_func, get_value_func, time_from, time_to):
@@ -72,7 +72,7 @@ def compute_avg_func(values, get_date_func, get_value_func, time_from, time_to):
         a = np.array(values_in)
         avg = a.mean()
     else:
-        avg = -1
+        avg = np.NaN
     return avg
 
 
@@ -95,7 +95,7 @@ def compute_delta_avg_func(values, get_date_func, get_value_func, time_created, 
         avg = compute_avg_func(values, get_date_func, get_value_func, start, end)
         return avg
     else:
-        return -1
+        return np.NaN
 
 
 def compute_contrib_count(contribs, percent, time_from, time_to):
@@ -141,7 +141,7 @@ def compute_delta_contrib_count(contribs, percent, time_created, point_in_time, 
         count = compute_contrib_count(contribs, percent, start, end)
         return count
     else:
-        return -1
+        return np.NaN
 
 
 def compute_contrib(contribs, percent, time_from, time_to):
