@@ -19,3 +19,10 @@
 - experimenty se získaným datasetem
 - popis výsledné aplikace
 - závěr
+
+## Nápady, co tam musím strčit
+
+- to, že jsem to nejdřív testoval ve Weka
+- grafy z Weka (korelace atp.)
+- rozbor chybně klasifikovaných
+- podrobnější popis GradientBoostingRegressor
