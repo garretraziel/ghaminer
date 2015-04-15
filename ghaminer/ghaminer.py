@@ -601,11 +601,17 @@ def get_repo_stats(gh, login, name, predict_all):
     if fork:
         # pokud se jedna o fork, beru cas az od forknuti
         time_forked = parse_date(created_at).date()
-        duration = max(0, (today - time_forked).days)
+        if random.choice([True, False]):
+            duration = max(0, (today - time_forked).days)
+        else:
+            duration = max(0, (time_ended - time_forked).days)
         random_days = random.randint(0, duration)
         point_in_time = time_forked + datetime.timedelta(days=random_days)
     else:
-        random_days = random.randint(0, (today - time_created).days)
+        if random.choice([True, False]):
+            random_days = random.randint(0, (today - time_created).days)
+        else:
+            random_days = random.randint(0, (time_ended - time_created).days)
         point_in_time = time_created + datetime.timedelta(days=random_days)
     duration = (point_in_time - time_created).days + 1
     values.append(str(duration))
