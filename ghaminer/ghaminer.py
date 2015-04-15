@@ -181,7 +181,7 @@ def get_all_commits(gh, login, name):
     :param string login: login vlastnika repozitare
     :param string name: nazev repozitare
     :return: pole vsech commitu, udaje o trvani repozitare
-    :rtype: [dict], datetime.datetime, datetime.datetime
+    :rtype: [dict], datetime.date, datetime.date
     """
     commits = download_all(gh, gh.repos(login)(name).commits())
     if len(commits) == 0:
@@ -234,8 +234,8 @@ def get_commits_stats(commits, time_created, point_in_time):
     """Ziska mozne statistiky o commitech k repozitari v zadany cas.
 
     :param [dict] commits: pole vsech commitu do repozitare
-    :param datetime.datetime time_created: cas vytvoreni repozitare
-    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :param datetime.date time_created: cas vytvoreni repozitare
+    :param datetime.date point_in_time: chvile, pro kterou se maji statistiky pocitat
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
@@ -265,8 +265,8 @@ def get_issues_stats(issues, time_created, point_in_time):
     """Ziska mozne statistiky o issues nebo pull requestech k repozitari v zadany cas.
 
     :param [(dict, [dict])] issues: slovnik issues nebo pull requestu
-    :param datetime.datetime time_created: cas vytvoreni repozitare
-    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :param datetime.date time_created: cas vytvoreni repozitare
+    :param datetime.date point_in_time: chvile, pro kterou se maji statistiky pocitat
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
@@ -371,8 +371,8 @@ def get_events_stats(events, time_created, point_in_time):
     """Ziska informace o udalostech v zadany cas.
 
     :param [dict] events: pole vsech udalosti repozitare
-    :param datetime.datetime time_created: cas vytvoreni repozitare
-    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :param datetime.date time_created: cas vytvoreni repozitare
+    :param datetime.date point_in_time: chvile, pro kterou se maji statistiky pocitat
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
@@ -394,8 +394,8 @@ def get_contributors_stats(commits, time_created, point_in_time):
     """Ziska informace o aktivite autoru commitu v zadany cas.
 
     :param [dict] commits: pole vsech commitu
-    :param datetime.datetime time_created: cas vytvoreni repozitare
-    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :param datetime.date time_created: cas vytvoreni repozitare
+    :param datetime.date point_in_time: chvile, pro kterou se maji statistiky pocitat
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
@@ -469,8 +469,8 @@ def get_commit_comments_stats(ccomments, time_created, point_in_time):
     """Ziska informace o komentarich v zadany cas.
 
     :param [dict] ccomments: pole vsech komentaru
-    :param datetime.datetime time_created: cas vytvoreni repozitare
-    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :param datetime.date time_created: cas vytvoreni repozitare
+    :param datetime.date point_in_time: chvile, pro kterou se maji statistiky pocitat
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
@@ -505,8 +505,8 @@ def get_forks_stats(forks, time_created, point_in_time):
     """Ziska informace o komentarich v zadany cas.
 
     :param [dict] forks: pole vsech forku
-    :param datetime.datetime time_created: cas vytvoreni repozitare
-    :param datetime.datetime point_in_time: chvile, pro kterou se maji statistiky pocitat
+    :param datetime.date time_created: cas vytvoreni repozitare
+    :param datetime.date point_in_time: chvile, pro kterou se maji statistiky pocitat
     :return: pole hodnot, ktere se maji pridat k atributum objektu
     :rtype: list
     """
