@@ -106,7 +106,7 @@ def download(gh, download_obj, **kwargs):
             return result
         except github.ApiError as e:
             if gh.x_ratelimit_remaining == 0:
-                print "INFO: waiting for ratelimit"
+                print "INFO: waiting for ratelimit until", gh.x_ratelimit_reset
                 pause.until(gh.x_ratelimit_reset)
                 print "INFO: continuing..."
             else:
