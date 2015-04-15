@@ -593,7 +593,7 @@ def get_repo_stats(gh, login, name, predict_all):
     print "  downloading commits..."
     commits, time_created, time_ended = get_all_commits(gh, login, name)
 
-    if (today - time_ended).year < 1:
+    if (today - time_ended).days / 365 < 1:
         print "skipping, too new"
         raise RepoNotValid
 
