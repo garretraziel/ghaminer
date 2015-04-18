@@ -87,6 +87,7 @@ one_day = datetime.timedelta(days=1)
 get_commit_date = lambda x: parse_date(x['commit']['committer']['date']).date()
 get_direct_date = lambda x: parse_date(x['created_at']).date()
 get_time_to_close = lambda x: (parse_date(x['closed_at']).date() - parse_date(x['created_at']).date()).days
+get_close_date = lambda x: parse_date(x['closed_at']).date()
 
 
 class RepoNotValid(Exception):
