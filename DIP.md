@@ -26,3 +26,4 @@
 - grafy z Weka (korelace atp.)
 - rozbor chybně klasifikovaných
 - podrobnější popis GradientBoostingRegressor
+- http://arxiv.org/pdf/1309.0238v1.pdf
