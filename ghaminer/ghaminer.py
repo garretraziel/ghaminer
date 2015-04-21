@@ -75,7 +75,7 @@ ATTRS = [
     "forks_count", "forks_f_1w", "forks_f_1m", "forks_f_6m", "forks_f_1y", "forks_f_all",
 
     # hodnoty pro predikci
-    "percentage_remains"]
+    "result"]
 REST_ATTRS = [
     # hodnoty pro predikci
     "freq_ratio", "future_freq_1w", "future_freq_1m", "future_freq_6m", "future_freq_1y"
@@ -87,6 +87,7 @@ one_day = datetime.timedelta(days=1)
 get_commit_date = lambda x: parse_date(x['commit']['committer']['date']).date()
 get_direct_date = lambda x: parse_date(x['created_at']).date()
 get_time_to_close = lambda x: (parse_date(x['closed_at']).date() - parse_date(x['created_at']).date()).days
+get_close_date = lambda x: parse_date(x['closed_at']).date()
 
 
 class RepoNotValid(Exception):
@@ -116,11 +117,12 @@ def download(gh, download_obj, **kwargs):
             print "ERR: Got SSL error..."
 
 
-def download_all(gh, download_obj, **kwargs):
+def download_all(gh, download_obj, skip_big=True, **kwargs):
     """Vola prikaz pro ziskani dat opakovane se zvysujicim se argumentem page.
 
     :param github.GitHub gh: instance objektu GitHub
     :param download_obj: objekt, ktery se ma pouzit pro ziskani dat
+    :param bool skip_big: priznak, zda se ma repozitar s velkym poctem stran preskakovat
     :return: ziskana data
     """
     page = 1
@@ -130,7 +132,7 @@ def download_all(gh, download_obj, **kwargs):
         if len(result) > 0:
             values.extend(result)
             page += 1
-            if page > 2000:
+            if skip_big and page > 2000:
                 print "ERR: Repo too large, skipping..."
                 raise RepoNotValid("too large")
         else:
@@ -181,16 +183,17 @@ def compute_commit_freq_activity(commits, point_in_time):
         return np.NaN
 
 
-def get_all_commits(gh, login, name):
+def get_all_commits(gh, login, name, skip_big=True):
     """Vrati pole vsech commitu a informace o vytvoreni zadaneho repozitare.
 
     :param github.GitHub gh: instance objektu GitHub
     :param string login: login vlastnika repozitare
     :param string name: nazev repozitare
+    :param bool skip_big: priznak, zda se ma repozitar s velkym poctem stran preskakovat
     :return: pole vsech commitu, udaje o trvani repozitare
     :rtype: [dict], datetime.date, datetime.date
     """
-    commits = download_all(gh, gh.repos(login)(name).commits())
+    commits = download_all(gh, gh.repos(login)(name).commits(), skip_big)
     if len(commits) == 0:
         raise RepoNotValid  # prazdny repozitar je k nicemu
 
@@ -205,17 +208,18 @@ def get_all_commits(gh, login, name):
     return commits, time_created, time_ended
 
 
-def get_all_issues_pulls(gh, login, name):
+def get_all_issues_pulls(gh, login, name, skip_big=True):
     """Vrati vsechy issues a pull requesty zadaneho repozitare a jejich patricne komentare.
 
     :param github.GitHub gh: instance objektu GitHub
     :param string login: login vlastnika repozitare
     :param string name: nazev repozitare
+    :param bool skip_big: priznak, zda se ma repozitar s velkym poctem stran preskakovat
     :return: issues a pull requesty spolu s jejich komentari
     :rtype: ([(dict, [dict])], [(dict, [dict])])
     """
     # ziskam seznam vsech issues a pull requestu
-    issues_pulls = download_all(gh, gh.repos(login)(name).issues(), state="all", direction="asc")
+    issues_pulls = download_all(gh, gh.repos(login)(name).issues(), skip_big, state="all", direction="asc")
 
     # roztridim na issues a pull requests
     issues = []
@@ -229,10 +233,10 @@ def get_all_issues_pulls(gh, login, name):
     issues_comm = []
     pulls_comm = []
     for i in issues:
-        comments = download_all(gh, gh.repos(login)(name).issues()(i['number']).comments())
+        comments = download_all(gh, gh.repos(login)(name).issues()(i['number']).comments(), skip_big)
         issues_comm.append((i, comments))
     for p in pulls:
-        comments = download_all(gh, gh.repos(login)(name).issues()(p['number']).comments())
+        comments = download_all(gh, gh.repos(login)(name).issues()(p['number']).comments(), skip_big)
         pulls_comm.append((p, comments))
     return issues_comm, pulls_comm
 
@@ -361,16 +365,17 @@ def get_issues_stats(issues, time_created, point_in_time):
     return values
 
 
-def get_all_events(gh, login, name):
+def get_all_events(gh, login, name, skip_big=True):
     """Ziska seznam uplne vsech udalosti zadaneho repozitare.
 
     :param github.GitHub gh: instance objektu GitHub
     :param string login: login vlastnika repozitare
     :param string name: nazev repozitare
+    :param bool skip_big: priznak, zda se ma repozitar s velkym poctem stran preskakovat
     :return: seznam vsech udalosti repozitare
     :rtype: list
     """
-    events = download_all(gh, gh.repos(login)(name).events())
+    events = download_all(gh, gh.repos(login)(name).events(), skip_big)
     return events
 
 
@@ -459,16 +464,17 @@ def get_contributors_stats(commits, time_created, point_in_time):
     return values
 
 
-def get_all_commit_comments(gh, login, name):
+def get_all_commit_comments(gh, login, name, skip_big=True):
     """Ziska seznam vsech komentaru ke commitum
 
     :param github.GitHub gh: instance objektu GitHub
     :param string login: login vlastnika repozitare
     :param string name: nazev repozitare
+    :param bool skip_big: priznak, zda se ma repozitar s velkym poctem stran preskakovat
     :return: seznam vsech commit komentaru
     :rtype: list
     """
-    comments = download_all(gh, gh.repos(login)(name).comments())
+    comments = download_all(gh, gh.repos(login)(name).comments(), skip_big)
     return comments
 
 
@@ -495,16 +501,17 @@ def get_commit_comments_stats(ccomments, time_created, point_in_time):
     return values
 
 
-def get_all_forks(gh, login, name):
+def get_all_forks(gh, login, name, skip_big=True):
     """Ziska seznam vsech forku.
 
     :param github.GitHub gh: instance objektu GitHub
     :param string login: login vlastnika repozitare
     :param string name: nazev repozitare
+    :param bool skip_big: priznak, zda se ma repozitar s velkym poctem stran preskakovat
     :return: seznam vsech forku
     :rtype: list
     """
-    forks = download_all(gh, gh.repos(login)(name).forks())
+    forks = download_all(gh, gh.repos(login)(name).forks(), skip_big)
     return forks
 
 
@@ -563,8 +570,50 @@ def get_latest_commit_for_date(commits, point_in_time):
     return prev_date
 
 
-def get_repo_stats(gh, login, name, predict_all):
+def get_repo_stats(gh, login, name, skip_big=True):
     """Ziska veskere statistiky k zadanemu repozitari.
+
+    :param github.GitHub gh: instance objektu GitHub
+    :param string login: login vlastnika repozitare
+    :param string name: nazev repozitare
+    :param bool skip_big: priznak, zda se ma repozitar s velkym poctem stran preskakovat
+    :return: seznam vsech atributu repozitare
+    :rtype: list
+    """
+    today = datetime.date.today()
+    _, _, fork, created_at = get_basic_repo_info(gh, login, name)
+    values = [str(fork)]
+    commits, time_created, time_ended = get_all_commits(gh, login, name, skip_big)
+
+    duration = (today - time_created).days + 1
+    values.append(str(duration))
+    since_last_commit = (today - time_ended).days
+    values.append(str(since_last_commit))
+
+    values.extend(get_commits_stats(commits, time_created, today))
+    issues, pulls = get_all_issues_pulls(gh, login, name)
+    values.extend(get_issues_stats(issues, time_created, today))
+    values.extend(get_issues_stats(pulls, time_created, today))
+    try:
+        events = get_all_events(gh, login, name)
+        values.extend(get_events_stats(events, time_created, today))
+    except github.ApiError:
+        # GitHub limituje maximalni pocet stran udalosti
+        values.extend(["nan"] * 6)
+    contributors = get_contributors_stats(commits, time_created, today)
+    values.extend(contributors)
+    ccomments = get_all_commit_comments(gh, login, name)
+    values.extend(get_commit_comments_stats(ccomments, time_created, today))
+    forks = get_all_forks(gh, login, name)
+    values.extend(get_forks_stats(forks, time_created, today))
+
+    predict = ",".join(values)
+
+    return commits, issues, pulls, forks, time_created, time_ended, contributors[0], predict
+
+
+def get_repo_stats_predict(gh, login, name, predict_all):
+    """Ziska veskere statistiky k zadanemu repozitari a v nahodne zvoleny cas zjisti miru aktivity v budoucnosti.
 
     :param github.GitHub gh: instance objektu GitHub
     :param string login: login vlastnika repozitare
@@ -700,12 +749,9 @@ def main(sample_count, output, predict_all):
 
             # ziskej z neho data. pokud nelze pouzit, pokracuj, ale nesnizuj zbyvajici pocet
             try:
-                stats = get_repo_stats(gh, s['owner']['login'], s['name'], predict_all)
+                stats = get_repo_stats_predict(gh, s['owner']['login'], s['name'], predict_all)
 
                 f.write(",".join(stats) + "\n")
-
-                # TODO: participation? jak se zmenila frekvence nejvlivnejsich lidi?
-                # TODO: watchers https://developer.github.com/v3/activity/watching/
 
                 percentage += one_part
                 print "%.3f %%" % percentage
