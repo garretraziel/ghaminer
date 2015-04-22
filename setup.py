@@ -10,6 +10,6 @@ setup(name='ghaminer',
       url='https://github.com/garretraziel/ghaminer',
       packages=['ghaminer'],
       install_requires=[
-          'pause', 'numpy', 'githubpy', 'python-dateutil', 'pytz'
+          'pause', 'numpy', 'githubpy', 'python-dateutil', 'pytz', 'pandas', 'scipy'
       ],
      )

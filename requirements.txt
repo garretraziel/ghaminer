@@ -3,3 +3,5 @@ numpy
 githubpy==1.1.0
 python-dateutil
 pytz
+pandas
+scipy
