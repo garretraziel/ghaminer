@@ -549,7 +549,11 @@ def get_basic_repo_info(gh, login, name):
     """
     # Obecne informace
     r = download(gh, gh.repos(login)(name))
-    return r["id"], r["full_name"], r["fork"], r["created_at"]
+    if r["fork"]:
+        forked_from = r["parent"]["full_name"]
+    else:
+        forked_from = None
+    return r["id"], r["full_name"], r["fork"], r["created_at"], forked_from
 
 
 def get_latest_commit_for_date(commits, point_in_time):
@@ -581,7 +585,7 @@ def get_repo_stats(gh, login, name, skip_big=True):
     :rtype: list
     """
     today = datetime.date.today()
-    _, _, fork, created_at = get_basic_repo_info(gh, login, name)
+    _, _, fork, created_at, _ = get_basic_repo_info(gh, login, name)
     values = [str(fork)]
     commits, time_created, time_ended = get_all_commits(gh, login, name, skip_big)
 
