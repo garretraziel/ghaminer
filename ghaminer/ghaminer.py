@@ -638,7 +638,7 @@ def get_repo_stats_predict(gh, login, name, predict_all):
 
     # Obecne informace
     # vyberu to, co mohu ziskat primo, bez zapojeni casu
-    _, _, fork, created_at = get_basic_repo_info(gh, login, name)
+    _, _, fork, created_at, _ = get_basic_repo_info(gh, login, name)
     values = [str(fork)]
 
     # Informace o commitech
