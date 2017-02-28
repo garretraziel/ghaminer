@@ -7,7 +7,7 @@ import ghamath
 from dateutil.relativedelta import relativedelta
 import datetime
 
-gh = github.GitHub(username="garretraziel", password="Boloomka0951")
+gh = github.GitHub(username="garretraziel", password="...")
 
 print "getting information..."
 commits, first, last = ghaminer.get_all_commits(gh, "os-autoinst", "os-autoinst")
